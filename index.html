@@ -104,6 +104,12 @@
   .lista-cli div:last-child { border-bottom: 0; }
   .lista-cli small { color: var(--muted); }
   .elegido { margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--ok); display: none; }
+  .chks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 10px; margin-top: 4px; }
+  .chk { display: flex; align-items: center; gap: 8px; padding: 7px 2px; font-size: 14px; font-weight: 400;
+    color: var(--ink); margin: 0; cursor: pointer; }
+  .chk input { width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
+  .sub { font-size: 12.5px; color: var(--muted); margin: 14px 0 2px; font-weight: 650;
+    text-transform: uppercase; letter-spacing: .5px; }
   .acciones { display: flex; gap: 10px; margin-top: 18px; }
   .acciones .btn { flex: 1; justify-content: center; padding: 13px; }
   .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
@@ -139,12 +145,16 @@
 <main hidden id="cuerpo">
   <div class="aviso" id="aviso"></div>
   <section id="vPedir"></section>
+  <section id="vAuto" hidden></section>
   <section id="vMios" hidden></section>
+  <section id="vUsuarios" hidden></section>
 </main>
 
 <nav hidden id="barra">
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span>Pedir</button>
+  <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span>Automáticos</button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span>Mis informes<span class="cont" id="cont"></span></button>
+  <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span>Usuarios</button>
 </nav>
 
 <div class="velo" id="velo" onclick="cerrarHoja()"></div>
@@ -157,6 +167,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDO = null, timer = null, confirmando = false;
+var AUTOS = null, USU = null, EDIT = null;
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -225,6 +236,8 @@ function entrarApp(d) {
   $('login').style.display = 'none';
   $('cab').hidden = $('cuerpo').hidden = $('barra').hidden = false;
   $('hola').textContent = 'Hola, ' + d.usuario.nombre;
+  $('tAuto').hidden = !d.hay_automaticos;
+  $('tUsuarios').hidden = d.usuario.rol !== 'admin';
   pintarEstado(); pintarInformes(); pintarPedidos(); programar();
 }
 
@@ -310,26 +323,160 @@ function pintarPedidos() {
   }).join('');
 }
 
+var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'],
+               mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'] };
 function ver(v) {
-  $('vPedir').hidden = v !== 'pedir'; $('vMios').hidden = v !== 'mios';
-  $('tPedir').className = v === 'pedir' ? 'act' : ''; $('tMios').className = v === 'mios' ? 'act' : '';
+  for (var k in VISTAS) {
+    $(VISTAS[k][0]).hidden = k !== v;
+    $(VISTAS[k][1]).className = k === v ? 'act' : '';
+  }
+  if (v === 'auto') cargarAutomaticos();
+  if (v === 'usuarios') cargarUsuarios();
   window.scrollTo(0, 0);
+}
+
+// ---------------------------------------------------------------- automáticos
+function fechaCorta(ms) {
+  var d = new Date(ms);
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' +
+         d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+}
+function cargarAutomaticos() {
+  $('vAuto').innerHTML = '<div class="vacio">Buscando lo último…</div>';
+  api('automaticos').then(function (d) { AUTOS = d.informes; pintarAutomaticos(); })
+    .catch(function (e) { $('vAuto').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>'; });
+}
+function pintarAutomaticos() {
+  if (!AUTOS || !AUTOS.length) {
+    $('vAuto').innerHTML = '<div class="vacio">No tenés informes automáticos habilitados.</div>'; return;
+  }
+  $('vAuto').innerHTML = AUTOS.map(function (a) {
+    var arch = a.archivos.length ? a.archivos.map(function (f) {
+      return '<button class="btn sec" style="width:100%;justify-content:flex-start;margin-top:6px" ' +
+        'onclick="bajarAuto(\'' + esc(a.clave) + '\',\'' + esc(f.fid) + '\',this)">' +
+        '<span style="color:var(--muted);font-weight:500">' + esc(fechaCorta(f.fecha)) + '</span> ' +
+        esc(f.nombre) + '</button>';
+    }).join('') : '<div class="ped-sub">Todavía no llegó ninguno.</div>';
+    return '<div class="pedido"><div class="ped-top"><span class="ped-nom">' +
+      esc(a.dibujo || '📄') + ' ' + esc(a.nombre) + '</span></div>' + arch + '</div>';
+  }).join('');
+}
+function bajarAuto(clave, fid, boton) {
+  var txt = boton.innerHTML;
+  boton.disabled = true; boton.textContent = 'Abriendo…';
+  api('archivo_auto', { clave: clave, fid: fid }).then(function (a) { guardarArchivo(a); })
+    .catch(function (e) { toast(e.message || 'No pude abrir el archivo.'); })
+    .then(function () { boton.disabled = false; boton.innerHTML = txt; });
+}
+
+// ---------------------------------------------------------------- usuarios (admin)
+function cargarUsuarios() {
+  $('vUsuarios').innerHTML = '<div class="vacio">Cargando…</div>';
+  api('usuarios').then(function (d) { USU = d; pintarUsuarios(); })
+    .catch(function (e) { $('vUsuarios').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>'; });
+}
+function cuantos(txt, total) {
+  if (txt === '*') return 'todos';
+  if (!txt) return 'ninguno';
+  return txt.split(',').filter(String).length + ' de ' + total;
+}
+function pintarUsuarios() {
+  var h = USU.usuarios.map(function (p, n) {
+    return '<div class="pedido"><div class="ped-top"><span class="ped-nom">' + esc(p.nombre || p.email) + '</span>' +
+      '<span class="badge ' + (!p.activo ? 'b-error' : (p.rol === 'admin' ? 'b-generando' : 'b-listo')) + '">' +
+      (!p.activo ? 'Inactivo' : (p.rol === 'admin' ? 'Administrador' : 'Usuario')) + '</span></div>' +
+      '<div class="ped-sub">' + esc(p.email) + '</div>' +
+      '<div class="ped-sub">Informes: ' + esc(cuantos(p.informes, USU.catalogo.length)) +
+      ' · Automáticos: ' + esc(cuantos(p.automaticos, USU.automaticos.length)) + '</div>' +
+      '<div class="ped-acc"><button class="btn sec" onclick="editarUsuario(' + n + ')">Editar</button></div></div>';
+  }).join('');
+  h += '<div class="ped-acc" style="margin-top:14px"><button class="btn" onclick="editarUsuario(-1)">+ Agregar persona</button></div>';
+  $('vUsuarios').innerHTML = h;
+}
+function casillas(lista, permitidos, prefijo) {
+  var todos = permitidos === '*';
+  var ok = todos ? [] : String(permitidos || '').split(',').map(function (x) { return x.trim(); });
+  return lista.map(function (i) {
+    return '<label class="chk"><input type="checkbox" class="' + prefijo + '" value="' + esc(i.clave) + '"' +
+      (todos || ok.indexOf(i.clave) >= 0 ? ' checked' : '') + '>' + esc(i.nombre) + '</label>';
+  }).join('');
+}
+function editarUsuario(n) {
+  var p = n < 0 ? { nombre: '', email: '', rol: 'usuario', informes: '', automaticos: '', activo: true }
+                : USU.usuarios[n];
+  EDIT = p;
+  var porRubro = {}, orden = [];
+  USU.catalogo.forEach(function (i) {
+    var r = i.rubro || 'Otros';
+    if (!porRubro[r]) { porRubro[r] = []; orden.push(r); }
+    porRubro[r].push(i);
+  });
+  var h = '<h2>' + (n < 0 ? 'Agregar persona' : esc(p.nombre || p.email)) + '</h2>';
+  h += '<label>Nombre</label><input id="uNombre" value="' + esc(p.nombre) + '" placeholder="Cómo lo ve ella o él">';
+  h += '<label>Mail de Google</label><input id="uMail" type="email" autocapitalize="off" value="' + esc(p.email) + '"' +
+       (n < 0 ? ' placeholder="persona@gmail.com"' : ' disabled') + '>';
+  h += '<div class="chks"><label class="chk"><input type="checkbox" id="uAdmin"' + (p.rol === 'admin' ? ' checked' : '') +
+       '>Administrador</label><label class="chk"><input type="checkbox" id="uActivo"' + (p.activo ? ' checked' : '') +
+       '>Puede entrar</label></div>';
+  h += '<div class="sub">Informes a pedido</div><div class="chks">' +
+       '<label class="chk"><input type="checkbox" onclick="marcarTodo(this, \'ci\')">Todos</label></div>';
+  orden.forEach(function (r) {
+    h += '<div class="sub" style="font-size:11.5px;margin-top:10px">' + esc(r) + '</div><div class="chks">' +
+         casillas(porRubro[r], p.informes, 'ci') + '</div>';
+  });
+  h += '<div class="sub">Informes automáticos</div><div class="chks">' +
+       '<label class="chk"><input type="checkbox" onclick="marcarTodo(this, \'ca\')">Todos</label></div>' +
+       '<div class="chks">' + casillas(USU.automaticos, p.automaticos, 'ca') + '</div>';
+  h += '<div class="acciones"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button>' +
+       '<button class="btn" id="bGuardar" onclick="guardarUsuario()">Guardar</button></div>';
+  $('hoja').innerHTML = h;
+  $('velo').style.display = 'block';
+  requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
+}
+function marcarTodo(c, clase) {
+  var l = document.getElementsByClassName(clase);
+  for (var i = 0; i < l.length; i++) l[i].checked = c.checked;
+}
+function marcadas(clase) {
+  var l = document.getElementsByClassName(clase), out = [];
+  for (var i = 0; i < l.length; i++) if (l[i].checked) out.push(l[i].value);
+  return out;
+}
+function guardarUsuario() {
+  var b = $('bGuardar');
+  b.disabled = true; b.textContent = 'Guardando…';
+  var inf = marcadas('ci'), aut = marcadas('ca');
+  api('guardar_usuario', {
+    email: EDIT.email || $('uMail').value,
+    nombre: $('uNombre').value,
+    rol: $('uAdmin').checked ? 'admin' : 'usuario',
+    activo: $('uActivo').checked,
+    informes: inf.length === USU.catalogo.length ? '*' : inf,
+    automaticos: aut.length === USU.automaticos.length ? '*' : aut
+  }).then(function (d) {
+    USU = d; cerrarHoja(); pintarUsuarios(); toast('Guardado');
+  }).catch(function (e) {
+    b.disabled = false; b.textContent = 'Guardar'; toast(e.message || e);
+  });
 }
 
 // ---------------------------------------------------------------- archivos
 function bajar(id, indice, boton) {
   var txt = boton.textContent;
   boton.disabled = true; boton.textContent = 'Abriendo…';
-  api('archivo', { id: id, indice: indice }).then(function (a) {
-    var bin = atob(a.base64), bytes = new Uint8Array(bin.length);
-    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    var url = URL.createObjectURL(new Blob([bytes], { type: a.tipo || 'application/octet-stream' }));
-    var link = document.createElement('a');
-    link.href = url; link.download = a.nombre; link.rel = 'noopener';
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
-  }).catch(function (e) { toast(e.message || 'No pude abrir el archivo.'); })
+  api('archivo', { id: id, indice: indice }).then(guardarArchivo)
+    .catch(function (e) { toast(e.message || 'No pude abrir el archivo.'); })
     .then(function () { boton.disabled = false; boton.textContent = txt; });
+}
+
+function guardarArchivo(a) {
+  var bin = atob(a.base64), bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  var url = URL.createObjectURL(new Blob([bytes], { type: a.tipo || 'application/octet-stream' }));
+  var link = document.createElement('a');
+  link.href = url; link.download = a.nombre; link.rel = 'noopener';
+  document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
 }
 
 // ---------------------------------------------------------------- pedir
