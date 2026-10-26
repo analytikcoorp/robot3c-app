@@ -169,6 +169,8 @@ function hora(ms) { if (!ms) return ''; var d = new Date(ms), h = new Date();
   return d.toDateString() === h.toDateString() ? hm : d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' + hm; }
 function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
 function deIso(s) { var p = s.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+// informes que piden confirmación: conciliar cheques y las órdenes al robot (clave __)
+function critico(i) { return !!i.confirmar || String(i.clave).indexOf('__') === 0; }
 
 // ---------------------------------------------------------------- servidor
 function api(accion, extra) {
@@ -281,7 +283,7 @@ function pintarInformes() {
   if (!orden.length) { $('vPedir').innerHTML = '<div class="vacio">Todavía no hay informes habilitados para vos.</div>'; return; }
   $('vPedir').innerHTML = orden.map(function (r) {
     return '<div class="rubro">' + esc(r) + '</div><div class="grilla">' + porRubro[r].map(function (i) {
-      return '<button class="inf' + (i.confirmar ? ' critico' : '') + '" onclick="abrir(\'' + esc(i.clave) + '\')">' +
+      return '<button class="inf' + (critico(i) ? ' critico' : '') + '" onclick="abrir(\'' + esc(i.clave) + '\')">' +
         '<span class="ico">' + esc(i.dibujo || '📄') + '</span><span class="nom">' + esc(i.nombre) + '</span></button>';
     }).join('') + '</div>';
   }).join('');
@@ -337,8 +339,10 @@ function abrir(clave) {
   ACTUAL = i; ELEGIDO = null; confirmando = false;
   var hoy = new Date(), ayer = new Date(Date.now() - 86400000), ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   var h = '<h2>' + esc(i.dibujo || '') + ' ' + esc(i.nombre) + '</h2><p class="desc">' + esc(i.desc) + '</p>';
-  if (i.confirmar) {
-    h += '<div class="peligro-box">⚠️ Esta acción <b>escribe en el sistema 3C</b>. Solo vos podés ejecutarla y queda registrada.</div>';
+  if (critico(i)) {
+    h += '<div class="peligro-box">⚠️ ' + (i.confirmar
+      ? 'Esta acción <b>escribe en el sistema 3C</b>. Solo vos podés ejecutarla y queda registrada.'
+      : 'Esta acción actúa sobre el robot y queda registrada.') + '</div>';
   }
   var e = i.entrada || 'nada';
   if (e === 'cliente' || e === 'cliente_fechas') {
@@ -362,8 +366,8 @@ function abrir(clave) {
          '<input id="fConf" autocomplete="off" autocapitalize="characters" placeholder="' + esc(i.confirmar) + '">';
   }
   h += '<div class="acciones"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button>' +
-       '<button class="btn' + (i.confirmar ? ' peligro' : '') + '" id="bPedir" onclick="enviar()">' +
-       (i.confirmar ? 'Ejecutar' : 'Pedir') + '</button></div>';
+       '<button class="btn' + (critico(i) ? ' peligro' : '') + '" id="bPedir" onclick="enviar()">' +
+       (critico(i) ? 'Ejecutar' : 'Pedir') + '</button></div>';
   $('hoja').innerHTML = h;
   $('velo').style.display = 'block';
   requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
@@ -437,12 +441,12 @@ function enviar() {
   if (i.confirmar) {
     conf = ($('fConf').value || '').trim().toUpperCase();
     if (conf !== i.confirmar) { toast('Escribí ' + i.confirmar + ' para confirmar.'); return; }
-    if (!confirmando) {                       // segunda confirmación: hay que tocar dos veces
-      confirmando = true;
-      b.textContent = 'Tocá de nuevo para ejecutar';
-      setTimeout(function () { if (confirmando) { confirmando = false; b.textContent = 'Ejecutar'; } }, 8000);
-      return;
-    }
+  }
+  if (critico(i) && !confirmando) {           // segunda confirmación: hay que tocar dos veces
+    confirmando = true;
+    b.textContent = 'Tocá de nuevo para ejecutar';
+    setTimeout(function () { if (confirmando) { confirmando = false; b.textContent = 'Ejecutar'; } }, 8000);
+    return;
   }
   b.disabled = true; b.textContent = 'Enviando…';
   api('pedir', { clave: i.clave, datos: datos, detalle: etiquetaDatos(i, datos), confirmacion: conf }).then(function (d) {
@@ -450,7 +454,7 @@ function enviar() {
     cerrarHoja(); pintarEstado(); pintarPedidos(); ver('mios'); programar();
     toast(DATA.robot.en_linea ? 'Pedido enviado' : 'Pedido anotado: sale cuando vuelva el robot');
   }).catch(function (e) {
-    b.disabled = false; b.textContent = i.confirmar ? 'Ejecutar' : 'Pedir'; confirmando = false;
+    b.disabled = false; b.textContent = critico(i) ? 'Ejecutar' : 'Pedir'; confirmando = false;
     toast(e.message || e);
   });
 }
