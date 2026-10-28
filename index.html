@@ -101,6 +101,11 @@
     background: var(--accent); color: #fff; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
   .btn.sec { background: var(--card); color: var(--accent); border: 1px solid var(--line-fuerte); }
   .btn.peligro { background: var(--bad); color: #fff; }
+  .btn.arch { width: 100%; margin-top: 6px; gap: 10px; text-align: left;
+    justify-content: space-between; align-items: baseline; }
+  .arch-nom { flex: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  .arch-fecha { flex: none; font-size: 12px; font-weight: 500; color: var(--tenue);
+    font-variant-numeric: tabular-nums; }
   .btn:disabled { opacity: .5; }
   .vacio { text-align: center; color: var(--muted); padding: 40px 10px; }
   nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
@@ -410,8 +415,8 @@ function ver(v) {
 // ---------------------------------------------------------------- automáticos
 function fechaCorta(ms) {
   var d = new Date(ms);
-  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' +
-         d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' · ' +
+         d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 function cargarAutomaticos() {
   $('vAuto').innerHTML = '<div class="vacio">Buscando lo último…</div>';
@@ -424,10 +429,9 @@ function pintarAutomaticos() {
   }
   $('vAuto').innerHTML = AUTOS.map(function (a) {
     var arch = a.archivos.length ? a.archivos.map(function (f) {
-      return '<button class="btn sec" style="width:100%;justify-content:flex-start;margin-top:6px" ' +
-        'onclick="bajarAuto(\'' + esc(a.clave) + '\',\'' + esc(f.fid) + '\',this)">' +
-        '<span style="color:var(--muted);font-weight:500">' + esc(fechaCorta(f.fecha)) + '</span> ' +
-        esc(f.titulo || f.nombre) + '</button>';
+      return '<button class="btn sec arch" onclick="bajarAuto(\'' + esc(a.clave) + '\',\'' +
+        esc(f.fid) + '\',this)"><span class="arch-nom">' + esc(f.titulo || f.nombre) + '</span>' +
+        '<span class="arch-fecha">' + esc(fechaCorta(f.fecha)) + '</span></button>';
     }).join('') : '<div class="ped-sub">Todavía no llegó ninguno.</div>';
     return '<div class="pedido"><div class="ped-top"><span class="ped-nom">' +
       esc(a.dibujo || '📄') + ' ' + esc(a.nombre) + '</span></div>' + arch + '</div>';
