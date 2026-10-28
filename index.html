@@ -51,11 +51,13 @@
   header { position: sticky; top: 0; z-index: 5; background: var(--brand); color: var(--brand-ink);
     padding: calc(env(safe-area-inset-top) + 12px) 16px 12px; display: flex; align-items: center; gap: 10px; }
   header .marca { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; }
-  header .logo { height: 24px; width: auto; display: block; flex: none; }
-  header h1 { font-size: 11.5px; margin: 0; font-weight: 800; letter-spacing: .08em;
-    text-transform: uppercase; color: var(--brand-label); line-height: 1.2; }
-  .hola { font-size: 14.5px; opacity: 1; font-weight: 600; display: block; letter-spacing: -.01em;
-    text-transform: none; color: var(--brand-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .logo { height: 26px; width: auto; display: block; flex: none; }
+  .fecha { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--brand-label); line-height: 1.3;
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .hola { display: block; font-size: 14.5px; font-weight: 600; letter-spacing: -.01em;
+    color: var(--brand-ink); line-height: 1.2;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .estado { font-size: 12px; font-weight: 600; letter-spacing: .03em; padding: 5px 11px;
     border-radius: 100px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
     display: flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; flex: none; }
@@ -171,7 +173,7 @@
 
 <header hidden id="cab">
   <div class="marca"><img class="logo" src="logo-jc-blanco.png" alt="JC">
-    <div><h1>Informes</h1><span class="hola" id="hola">Cargando…</span></div></div>
+    <div><span class="fecha" id="fecha"></span><span class="hola" id="hola">Cargando…</span></div></div>
   <button class="recargar" id="bRecargar" onclick="actualizar()" title="Actualizar" aria-label="Actualizar">↻</button>
   <div class="estado" id="estado" onclick="menuCuenta()"><span class="punto"></span><span id="estadoTxt">…</span></div>
 </header>
@@ -209,6 +211,16 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function
 function norm(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
 function toast(t) { var e = $('toast'); e.textContent = t; e.style.display = 'block';
   clearTimeout(e._t); e._t = setTimeout(function () { e.style.display = 'none'; }, 3600); }
+function pintarFecha() {
+  var d = new Date();
+  $('fecha').textContent =
+    d.toLocaleDateString('es-AR', { weekday: 'short', day: '2-digit', month: 'short' })
+     .replace('.', '') + ' · ' +
+    d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+pintarFecha();
+setInterval(pintarFecha, 20000);
+
 function hora(ms) { if (!ms) return ''; var d = new Date(ms), h = new Date();
   var hm = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
   return d.toDateString() === h.toDateString() ? hm : d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' + hm; }
@@ -415,7 +427,7 @@ function pintarAutomaticos() {
       return '<button class="btn sec" style="width:100%;justify-content:flex-start;margin-top:6px" ' +
         'onclick="bajarAuto(\'' + esc(a.clave) + '\',\'' + esc(f.fid) + '\',this)">' +
         '<span style="color:var(--muted);font-weight:500">' + esc(fechaCorta(f.fecha)) + '</span> ' +
-        esc(f.nombre) + '</button>';
+        esc(f.titulo || f.nombre) + '</button>';
     }).join('') : '<div class="ped-sub">Todavía no llegó ninguno.</div>';
     return '<div class="pedido"><div class="ped-top"><span class="ped-nom">' +
       esc(a.dibujo || '📄') + ' ' + esc(a.nombre) + '</span></div>' + arch + '</div>';
