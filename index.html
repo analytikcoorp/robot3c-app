@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <title>Robot 3C</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1F3A5F">
+<meta name="theme-color" content="#1f3d5c">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,63 +17,81 @@
 <link rel="apple-touch-icon" href="icono-192.png">
 <style>
   :root {
-    --bg: #F3F5F9; --card: #FFFFFF; --ink: #17202E; --muted: #6B7280; --line: #E3E8F0;
-    --brand: #1F3A5F; --brand-ink: #FFFFFF; --accent: #2E6BD8;
-    --ok: #1E7B4F; --ok-bg: #E4F4EC; --warn: #9A5B00; --warn-bg: #FDF1DC;
-    --bad: #B42318; --bad-bg: #FCE8E6; --run: #2E6BD8; --run-bg: #E6EEFC;
-    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+    /* mismos valores que estilo_informes.py (el estándar de los informes) */
+    --bg: #eef3f9; --card: #ffffff; --card-2: #e4edf6;
+    --ink: #182430; --muted: #51667a; --tenue: #8ea0b3;
+    --line: rgba(24,36,48,.10); --line-fuerte: rgba(24,36,48,.18);
+    --brand: #1f3d5c; --brand-ink: #f3f8fd; --brand-label: #a9c4e0;
+    --accent: #33587e; --accent-claro: #5b93c9;
+    --ok: #0a7d0a; --ok-bg: #e3f4e0;
+    --bad: #c23a3a; --bad-bg: #fbe4e1;
+    --warn: #5b7699; --warn-bg: #dde7f0;
+    --run: #33587e; --run-bg: #e4edf6;
+    --shadow: 0 1px 2px rgba(24,36,48,.06), 0 1px 3px rgba(24,36,48,.08);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0F141B; --card: #18202B; --ink: #E7ECF3; --muted: #95A1B2; --line: #263142;
-      --brand: #16263C; --brand-ink: #E7ECF3; --accent: #6F9CF0;
-      --ok: #5CC593; --ok-bg: #12301F; --warn: #F0B45A; --warn-bg: #33270F;
-      --bad: #F08A80; --bad-bg: #3A1714; --run: #7FA6F2; --run-bg: #16264A;
+      --bg: #0e1620; --card: #16222f; --card-2: #1d2d3f;
+      --ink: #e7eef6; --muted: #9fb2c6; --tenue: #7d91a6;
+      --line: rgba(233,240,247,.10); --line-fuerte: rgba(233,240,247,.20);
+      --brand: #16293d; --brand-ink: #f3f8fd; --brand-label: #a9c4e0;
+      --accent: #8fc6dc; --accent-claro: #5b93c9;
+      --ok: #7ec47e; --ok-bg: #143018;
+      --bad: #e8938d; --bad-bg: #3a1a18;
+      --warn: #a9c4e0; --warn-bg: #1f3148;
+      --run: #8fc6dc; --run-bg: #1d2d3f;
       --shadow: none;
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    font: 15px/1.45 "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .num { font-variant-numeric: tabular-nums; }
   button { font: inherit; color: inherit; }
   header { position: sticky; top: 0; z-index: 5; background: var(--brand); color: var(--brand-ink);
     padding: calc(env(safe-area-inset-top) + 12px) 16px 12px; display: flex; align-items: center; gap: 10px; }
-  header h1 { font-size: 17px; margin: 0; font-weight: 650; flex: 1; letter-spacing: .2px; }
-  .hola { font-size: 12px; opacity: .75; font-weight: 400; display: block; }
-  .estado { font-size: 12px; padding: 5px 10px; border-radius: 99px; background: rgba(255,255,255,.12);
-    display: flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; }
-  .punto { width: 8px; height: 8px; border-radius: 50%; background: #9AA4B2; }
-  .estado.on .punto { background: #4ADE80; box-shadow: 0 0 0 3px rgba(74,222,128,.25); }
-  .estado.off .punto { background: #F87171; }
+  header .marca { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; }
+  header .logo { height: 24px; width: auto; display: block; flex: none; }
+  header h1 { font-size: 11.5px; margin: 0; font-weight: 800; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--brand-label); line-height: 1.2; }
+  .hola { font-size: 14.5px; opacity: 1; font-weight: 600; display: block; letter-spacing: -.01em;
+    text-transform: none; color: var(--brand-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .estado { font-size: 12px; font-weight: 600; letter-spacing: .03em; padding: 5px 11px;
+    border-radius: 100px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+    display: flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; flex: none; }
+  .punto { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-label); }
+  .estado.on .punto { background: #8fe08f; box-shadow: 0 0 0 3px rgba(143,224,143,.22); }
+  .estado.off .punto { background: #f0a0a0; }
   main { padding: 14px 16px calc(84px + env(safe-area-inset-bottom)); max-width: 760px; margin: 0 auto; }
   .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 10px 12px;
     font-size: 13.5px; margin-bottom: 12px; display: none; }
-  .rubro { margin: 18px 2px 8px; font-size: 12.5px; font-weight: 650; color: var(--muted);
-    text-transform: uppercase; letter-spacing: .6px; }
+  .rubro { margin: 20px 2px 9px; font-size: 11.5px; font-weight: 800; color: var(--accent-claro);
+    text-transform: uppercase; letter-spacing: .08em; }
   .rubro:first-child { margin-top: 4px; }
   .grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-  .inf { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px;
+  .inf { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
     text-align: left; cursor: pointer; box-shadow: var(--shadow); display: flex; gap: 10px; align-items: flex-start;
     min-height: 58px; transition: transform .08s; }
   .inf:active { transform: scale(.98); }
   .inf .ico { font-size: 20px; line-height: 1.2; }
-  .inf .nom { font-weight: 560; font-size: 14px; }
-  .inf.critico { border-color: var(--bad); }
-  .pedido { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px;
+  .inf .nom { font-weight: 600; font-size: 14px; }
+  .inf.critico { border-left: 3px solid var(--bad); }
+  .pedido { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px;
     margin-bottom: 8px; box-shadow: var(--shadow); }
   .ped-top { display: flex; gap: 8px; align-items: baseline; }
   .ped-nom { font-weight: 600; flex: 1; }
   .ped-sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-  .badge { font-size: 11.5px; font-weight: 600; border-radius: 99px; padding: 3px 9px; white-space: nowrap; }
+  .badge { font-size: 11.5px; font-weight: 600; letter-spacing: .03em; border-radius: 100px;
+    padding: 4px 10px; white-space: nowrap; border: 1px solid var(--line-fuerte); }
   .b-pendiente { background: var(--warn-bg); color: var(--warn); }
   .b-generando { background: var(--run-bg); color: var(--run); }
   .b-listo { background: var(--ok-bg); color: var(--ok); }
   .b-error, .b-cancelado { background: var(--bad-bg); color: var(--bad); }
   .ped-msg { font-size: 13.5px; margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .ped-acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .btn { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; cursor: pointer;
+  .btn { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; letter-spacing: .01em; cursor: pointer;
     background: var(--accent); color: #fff; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
-  .btn.sec { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  .btn.sec { background: var(--card); color: var(--accent); border: 1px solid var(--line-fuerte); }
   .btn.peligro { background: var(--bad); color: #fff; }
   .btn:disabled { opacity: .5; }
   .vacio { text-align: center; color: var(--muted); padding: 40px 10px; }
@@ -79,7 +100,9 @@
   nav button { flex: 1; border: 0; background: none; padding: 10px 0 12px; color: var(--muted); font-size: 12px;
     display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; position: relative; }
   nav button .i { font-size: 20px; }
-  nav button.act { color: var(--accent); font-weight: 600; }
+  nav button.act { color: var(--accent); font-weight: 700; }
+  nav button span.i { opacity: .85; }
+  nav button.act span.i { opacity: 1; }
   .cont { position: absolute; top: 4px; left: calc(50% + 8px); background: var(--bad); color: #fff; font-size: 10.5px;
     border-radius: 99px; padding: 1px 6px; display: none; }
   .velo { position: fixed; inset: 0; background: rgba(10,15,25,.45); z-index: 9; display: none; }
@@ -98,8 +121,10 @@
   textarea { min-height: 76px; resize: vertical; }
   .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .chip { border: 1px solid var(--line); background: var(--bg); border-radius: 99px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
-  .lista-cli { border: 1px solid var(--line); border-radius: 10px; margin-top: 6px; max-height: 220px; overflow: auto; display: none; }
+  .chip { border: 1px solid var(--line-fuerte); background: var(--card-2); color: var(--accent);
+    border-radius: 100px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .lista-cli { border: 1px solid var(--line-fuerte); background: var(--card); border-radius: 10px;
+    margin-top: 6px; max-height: 220px; overflow: auto; display: none; }
   .lista-cli div { padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 14px; }
   .lista-cli div:last-child { border-bottom: 0; }
   .lista-cli small { color: var(--muted); }
@@ -108,20 +133,22 @@
   .chk { display: flex; align-items: center; gap: 8px; padding: 7px 2px; font-size: 14px; font-weight: 400;
     color: var(--ink); margin: 0; cursor: pointer; }
   .chk input { width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
-  .sub { font-size: 12.5px; color: var(--muted); margin: 14px 0 2px; font-weight: 650;
-    text-transform: uppercase; letter-spacing: .5px; }
+  .sub { font-size: 11.5px; color: var(--accent-claro); margin: 16px 0 2px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .08em; }
   .acciones { display: flex; gap: 10px; margin-top: 18px; }
   .acciones .btn { flex: 1; justify-content: center; padding: 13px; }
   .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
-    background: #17202E; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 20;
+    background: var(--brand); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 20;
     display: none; max-width: calc(100% - 32px); }
   /* ingreso */
   #login { position: fixed; inset: 0; background: var(--bg); z-index: 30; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
-  #login .logo { width: 86px; height: 86px; border-radius: 22px; background: var(--brand); color: #fff;
-    display: flex; align-items: center; justify-content: center; font: 700 36px/1 Georgia, "Times New Roman", serif;
-    letter-spacing: 1px; box-shadow: var(--shadow); }
-  #login h2 { margin: 6px 0 0; font-size: 20px; }
+  #login .logo { width: 92px; height: 92px; border-radius: 22px; background: var(--brand);
+    display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
+  #login .logo img { width: 52px; height: auto; display: block; }
+  #login h2 { margin: 6px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--accent-claro); }
+  #login .nombre { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; color: var(--muted); }
   #login p { margin: 0; color: var(--muted); font-size: 14px; max-width: 320px; }
   #login .err { color: var(--bad); font-size: 14px; max-width: 340px; min-height: 20px; }
 </style>
@@ -129,8 +156,9 @@
 <body>
 
 <div id="login">
-  <div class="logo">JC</div>
-  <h2>Robot 3C</h2>
+  <div class="logo"><img src="logo-jc-blanco.png" alt="JC"></div>
+  <h2>Informes</h2>
+  <p class="nombre">Robot 3C</p>
   <p>Informes del sistema. Entrá con la cuenta de Google de la empresa.</p>
   <div id="botonGoogle"></div>
   <div class="err" id="loginErr"></div>
@@ -138,7 +166,8 @@
 </div>
 
 <header hidden id="cab">
-  <h1>Robot 3C <span class="hola" id="hola">Cargando…</span></h1>
+  <div class="marca"><img class="logo" src="logo-jc-blanco.png" alt="JC">
+    <div><h1>Robot 3C</h1><span class="hola" id="hola">Cargando…</span></div></div>
   <div class="estado" id="estado" onclick="menuCuenta()"><span class="punto"></span><span id="estadoTxt">…</span></div>
 </header>
 
@@ -166,7 +195,7 @@
 <script>
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
-var CLIENTES = null, ACTUAL = null, ELEGIDO = null, timer = null, confirmando = false;
+var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
 var AUTOS = null, USU = null, EDIT = null;
 
 function $(id) { return document.getElementById(id); }
@@ -483,7 +512,7 @@ function guardarArchivo(a) {
 function abrir(clave) {
   var i = DATA.informes.filter(function (x) { return x.clave === clave; })[0];
   if (!i) return;
-  ACTUAL = i; ELEGIDO = null; confirmando = false;
+  ACTUAL = i; ELEGIDOS = []; confirmando = false;
   var hoy = new Date(), ayer = new Date(Date.now() - 86400000), ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   var h = '<h2>' + esc(i.dibujo || '') + ' ' + esc(i.nombre) + '</h2><p class="desc">' + esc(i.desc) + '</p>';
   if (critico(i)) {
@@ -493,8 +522,9 @@ function abrir(clave) {
   }
   var e = i.entrada || 'nada';
   if (e === 'cliente' || e === 'cliente_fechas') {
-    h += '<label>Cliente</label><input id="fCli" placeholder="Nombre o número de cliente" autocomplete="off" oninput="buscarCli()">' +
-         '<div class="lista-cli" id="lCli"></div><div class="elegido" id="eCli"></div>';
+    h += '<label>Clientes</label><input id="fCli" placeholder="Nombre o número; podés sumar varios" ' +
+         'autocomplete="off" oninput="buscarCli()"><div class="lista-cli" id="lCli"></div>' +
+         '<div class="chips" id="eCli"></div>';
   }
   if (e === 'fechas' || e === 'cliente_fechas') {
     var d0 = e === 'fechas' ? ayer : ini, d1 = e === 'fechas' ? ayer : hoy;
@@ -537,7 +567,7 @@ function cargarClientes() {
 }
 function buscarCli() {
   var inp = $('fCli'), l = $('lCli'); if (!inp || !l) return;
-  var q = norm(inp.value).trim(); ELEGIDO = null; $('eCli').style.display = 'none';
+  var q = norm(inp.value).trim();
   if (!q) { l.style.display = 'none'; return; }
   if (!CLIENTES) { l.innerHTML = '<div><small>Cargando clientes…</small></div>'; l.style.display = 'block'; return; }
   var pal = q.split(/\s+/);
@@ -546,21 +576,34 @@ function buscarCli() {
     var n = norm(c[1]); return pal.every(function (p) { return n.indexOf(p) >= 0; });
   }).slice(0, 30);
   l.innerHTML = r.length ? r.map(function (c) {
-    return '<div onclick="elegirCli(\'' + esc(c[0]) + '\')">' + esc(c[1]) + ' <small>N° ' + esc(c[0]) + '</small></div>';
+    var ya = ELEGIDOS.some(function (x) { return x[0] === c[0]; });
+    return '<div onclick="elegirCli(\'' + esc(c[0]) + '\')">' + (ya ? '✓ ' : '') + esc(c[1]) +
+      ' <small>N° ' + esc(c[0]) + '</small></div>';
   }).join('') : '<div><small>No encontré clientes con eso.</small></div>';
   l.style.display = 'block';
 }
 function elegirCli(cod) {
   var c = CLIENTES.filter(function (x) { return x[0] === cod; })[0]; if (!c) return;
-  ELEGIDO = c; $('fCli').value = c[1]; $('lCli').style.display = 'none';
-  var e = $('eCli'); e.textContent = '✓ ' + c[1] + ' (N° ' + c[0] + ')'; e.style.display = 'block';
+  if (!ELEGIDOS.some(function (x) { return x[0] === cod; })) ELEGIDOS.push(c);
+  $('fCli').value = ''; $('lCli').style.display = 'none'; $('fCli').focus();
+  pintarElegidos();
+}
+function sacarCli(cod) {
+  ELEGIDOS = ELEGIDOS.filter(function (x) { return x[0] !== cod; });
+  pintarElegidos();
+}
+function pintarElegidos() {
+  $('eCli').innerHTML = ELEGIDOS.map(function (c) {
+    return '<span class="chip" onclick="sacarCli(\'' + esc(c[0]) + '\')">' + esc(c[1]) +
+      ' <span style="color:var(--muted)">✕</span></span>';
+  }).join('');
 }
 
 function datosDe(i) {
   var e = i.entrada || 'nada', partes = [];
   if (e === 'cliente' || e === 'cliente_fechas') {
-    if (!ELEGIDO) throw new Error('Elegí un cliente de la lista.');
-    partes.push(ELEGIDO[0]);
+    if (!ELEGIDOS.length) throw new Error('Elegí al menos un cliente de la lista.');
+    partes.push(ELEGIDOS.map(function (c) { return c[0]; }).join(','));
   }
   if (e === 'fechas' || e === 'cliente_fechas') {
     var a = $('fDesde').value, b = $('fHasta').value;
@@ -576,8 +619,12 @@ function datosDe(i) {
   return partes.join(' ');
 }
 function etiquetaDatos(i, datos) {
-  if (ELEGIDO && (i.entrada === 'cliente' || i.entrada === 'cliente_fechas'))
-    return datos.replace(ELEGIDO[0], ELEGIDO[1] + ' (' + ELEGIDO[0] + ')');
+  if (ELEGIDOS.length && (i.entrada === 'cliente' || i.entrada === 'cliente_fechas')) {
+    var nombres = ELEGIDOS.length <= 3
+      ? ELEGIDOS.map(function (c) { return c[1]; }).join(', ')
+      : ELEGIDOS.length + ' clientes';
+    return datos.replace(ELEGIDOS.map(function (c) { return c[0]; }).join(','), nombres);
+  }
   return datos;
 }
 
