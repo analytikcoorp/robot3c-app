@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Robot 3C</title>
+<title>Informes JC</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1f3d5c">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Robot 3C">
+<meta name="apple-mobile-web-app-title" content="Informes JC">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icono-192.png">
 <link rel="apple-touch-icon" href="icono-192.png">
@@ -60,6 +60,12 @@
     border-radius: 100px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
     display: flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; flex: none; }
   .punto { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-label); }
+  .recargar { flex: none; width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+    color: var(--brand-ink); font-size: 17px; line-height: 1; padding: 0; }
+  .recargar:active { background: rgba(255,255,255,.22); }
+  .recargar.girando { animation: giro .9s linear infinite; }
+  @keyframes giro { to { transform: rotate(360deg); } }
   .estado.on .punto { background: #8fe08f; box-shadow: 0 0 0 3px rgba(143,224,143,.22); }
   .estado.off .punto { background: #f0a0a0; }
   main { padding: 14px 16px calc(84px + env(safe-area-inset-bottom)); max-width: 760px; margin: 0 auto; }
@@ -146,9 +152,8 @@
   #login .logo { width: 92px; height: 92px; border-radius: 22px; background: var(--brand);
     display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
   #login .logo img { width: 52px; height: auto; display: block; }
-  #login h2 { margin: 6px 0 0; font-size: 12px; font-weight: 800; letter-spacing: .08em;
+  #login h2 { margin: 10px 0 0; font-size: 13px; font-weight: 800; letter-spacing: .1em;
     text-transform: uppercase; color: var(--accent-claro); }
-  #login .nombre { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; color: var(--muted); }
   #login p { margin: 0; color: var(--muted); font-size: 14px; max-width: 320px; }
   #login .err { color: var(--bad); font-size: 14px; max-width: 340px; min-height: 20px; }
 </style>
@@ -158,8 +163,7 @@
 <div id="login">
   <div class="logo"><img src="logo-jc-blanco.png" alt="JC"></div>
   <h2>Informes</h2>
-  <p class="nombre">Robot 3C</p>
-  <p>Informes del sistema. Entrá con la cuenta de Google de la empresa.</p>
+  <p>Entrá con la cuenta de Google de la empresa.</p>
   <div id="botonGoogle"></div>
   <div class="err" id="loginErr"></div>
   <p style="font-size:12.5px">Para tenerlo como app: menú del navegador › <b>Agregar a pantalla de inicio</b>.</p>
@@ -167,7 +171,8 @@
 
 <header hidden id="cab">
   <div class="marca"><img class="logo" src="logo-jc-blanco.png" alt="JC">
-    <div><h1>Robot 3C</h1><span class="hola" id="hola">Cargando…</span></div></div>
+    <div><h1>Informes</h1><span class="hola" id="hola">Cargando…</span></div></div>
+  <button class="recargar" id="bRecargar" onclick="actualizar()" title="Actualizar" aria-label="Actualizar">↻</button>
   <div class="estado" id="estado" onclick="menuCuenta()"><span class="punto"></span><span id="estadoTxt">…</span></div>
 </header>
 
@@ -300,6 +305,32 @@ function refrescar() {
 }
 document.addEventListener('visibilitychange', function () { if (!document.hidden) refrescar(); });
 
+function actualizar() {
+  var b = $('bRecargar');
+  b.classList.add('girando');
+  buscarVersion();                              // ¿hay una versión nueva publicada?
+  var tareas = [api('refrescar').then(function (d) {
+    DATA.robot = d.robot; DATA.pedidos = d.pedidos; pintarEstado(); pintarPedidos(); programar();
+  })];
+  if (!$('vAuto').hidden) { AUTOS = null; tareas.push(api('automaticos').then(function (d) {
+    AUTOS = d.informes; pintarAutomaticos();
+  })); }
+  if (!$('vUsuarios').hidden) tareas.push(api('usuarios').then(function (d) { USU = d; pintarUsuarios(); }));
+  if (!$('vPedir').hidden) tareas.push(api('inicio').then(function (d) {
+    DATA.informes = d.informes; $('tAuto').hidden = !d.hay_automaticos; pintarInformes();
+  }));
+  CLIENTES = null;                              // la lista de clientes se vuelve a pedir
+  Promise.all(tareas).then(function () { toast('Actualizado'); })
+    .catch(function (e) { toast(e.message || 'No pude actualizar.'); })
+    .then(function () { setTimeout(function () { b.classList.remove('girando'); }, 400); });
+}
+
+function buscarVersion() {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.getRegistration) return;
+  navigator.serviceWorker.getRegistration().then(function (reg) { if (reg) reg.update(); })
+    .catch(function () {});
+}
+
 // ---------------------------------------------------------------- pintar
 function pintarEstado() {
   var r = DATA.robot || {}, e = $('estado'), t = $('estadoTxt'), av = $('aviso');
@@ -309,7 +340,7 @@ function pintarEstado() {
     av.style.display = 'none';
   } else {
     t.textContent = 'Sin conexión';
-    av.innerHTML = '⚠️ El robot (la notebook) no responde' + (r.ultimo ? ' desde ' + esc(hora(r.ultimo)) : '') +
+    av.innerHTML = '⚠️ La notebook no responde' + (r.ultimo ? ' desde ' + esc(hora(r.ultimo)) : '') +
       '. Podés dejar el pedido igual: se genera cuando vuelva.';
     av.style.display = 'block';
   }
@@ -646,7 +677,7 @@ function enviar() {
   api('pedir', { clave: i.clave, datos: datos, detalle: etiquetaDatos(i, datos), confirmacion: conf }).then(function (d) {
     DATA.robot = d.robot; DATA.pedidos = d.pedidos;
     cerrarHoja(); pintarEstado(); pintarPedidos(); ver('mios'); programar();
-    toast(DATA.robot.en_linea ? 'Pedido enviado' : 'Pedido anotado: sale cuando vuelva el robot');
+    toast(DATA.robot.en_linea ? 'Pedido enviado' : 'Pedido anotado: sale cuando vuelva la notebook');
   }).catch(function (e) {
     b.disabled = false; b.textContent = critico(i) ? 'Ejecutar' : 'Pedir'; confirmando = false;
     toast(e.message || e);
@@ -665,7 +696,16 @@ function repetir(id) {
 }
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  var recargando = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (recargando) return;                     // versión nueva lista: se carga sola
+    recargando = true;
+    location.reload();
+  });
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+    setInterval(buscarVersion, 3600000);        // una vez por hora, por las dudas
+  });
 }
 arrancar();
 </script>

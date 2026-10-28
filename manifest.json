@@ -1,7 +1,7 @@
 {
-  "name": "Robot 3C",
-  "short_name": "Robot 3C",
-  "description": "Informes del sistema 3C",
+  "name": "Informes JC",
+  "short_name": "Informes",
+  "description": "Informes de gestión",
   "lang": "es-AR",
   "start_url": ".",
   "scope": ".",
