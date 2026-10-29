@@ -577,7 +577,8 @@ function abrir(clave) {
     var d0 = e === 'fechas' ? ayer : ini, d1 = e === 'fechas' ? ayer : hoy;
     h += '<div class="fila2"><div><label>Desde</label><input type="date" id="fDesde" value="' + iso(d0) + '"></div>' +
          '<div><label>Hasta</label><input type="date" id="fHasta" value="' + iso(d1) + '"></div></div>' +
-         '<div class="chips"><span class="chip" onclick="rango(\'ayer\')">Ayer</span>' +
+         '<div class="chips"><span class="chip" onclick="rango(\'hoy\')">Hoy</span>' +
+         '<span class="chip" onclick="rango(\'ayer\')">Ayer</span>' +
          '<span class="chip" onclick="rango(\'mes\')">Este mes</span><span class="chip" onclick="rango(\'mesant\')">Mes anterior</span>' +
          '<span class="chip" onclick="rango(\'anio\')">Este año</span></div>';
   }
@@ -601,6 +602,7 @@ function cerrarHoja() { $('hoja').className = 'hoja'; $('velo').style.display = 
 
 function rango(q) {
   var h = new Date(), a, b;
+  if (q === 'hoy') { a = b = h; }
   if (q === 'ayer') { a = b = new Date(Date.now() - 86400000); }
   if (q === 'mes') { a = new Date(h.getFullYear(), h.getMonth(), 1); b = h; }
   if (q === 'mesant') { a = new Date(h.getFullYear(), h.getMonth() - 1, 1); b = new Date(h.getFullYear(), h.getMonth(), 0); }
