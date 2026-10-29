@@ -142,6 +142,15 @@
   .lista-cli div:last-child { border-bottom: 0; }
   .lista-cli small { color: var(--muted); }
   .elegido { margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--ok); display: none; }
+  .preg-caja { display: flex; gap: 8px; align-items: flex-end; background: var(--card);
+    border: 1px solid var(--line); border-radius: 14px; padding: 10px; box-shadow: var(--shadow); }
+  .preg-caja textarea { min-height: 44px; border: 0; background: none; padding: 8px 6px; resize: none; }
+  .preg-caja textarea:focus { outline: none; }
+  .preg-caja .btn { flex: none; }
+  .preg-resp { margin-top: 10px; font-size: 14.5px; white-space: pre-wrap; overflow-wrap: anywhere;
+    border-top: 1px solid var(--line); padding-top: 10px; }
+  .preg-resp.pensando { color: var(--muted); font-style: italic; border-top: 0; }
+  .preg-resp.error { color: var(--bad); }
   .chks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 10px; margin-top: 4px; }
   .chk { display: flex; align-items: center; gap: 8px; padding: 7px 2px; font-size: 14px; font-weight: 400;
     color: var(--ink); margin: 0; cursor: pointer; }
@@ -187,6 +196,7 @@
   <div class="aviso" id="aviso"></div>
   <section id="vPedir"></section>
   <section id="vAuto" hidden></section>
+  <section id="vPreguntar" hidden></section>
   <section id="vMios" hidden></section>
   <section id="vUsuarios" hidden></section>
 </main>
@@ -194,6 +204,7 @@
 <nav hidden id="barra">
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span>Pedir</button>
   <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span>Automáticos</button>
+  <button id="tPreguntar" hidden onclick="ver('preguntar')"><span class="i">💬</span>Preguntar</button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span>Mis informes<span class="cont" id="cont"></span></button>
   <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span>Usuarios</button>
 </nav>
@@ -208,7 +219,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var AUTOS = null, USU = null, EDIT = null;
+var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -288,6 +299,7 @@ function entrarApp(d) {
   $('cab').hidden = $('cuerpo').hidden = $('barra').hidden = false;
   $('hola').textContent = 'Hola, ' + d.usuario.nombre;
   $('tAuto').hidden = !d.hay_automaticos;
+  $('tPreguntar').hidden = !d.puede_preguntar;
   $('tUsuarios').hidden = d.usuario.rol !== 'admin';
   pintarEstado(); pintarInformes(); pintarPedidos(); programar();
 }
@@ -332,9 +344,13 @@ function actualizar() {
   if (!$('vAuto').hidden) { AUTOS = null; tareas.push(api('automaticos').then(function (d) {
     AUTOS = d.informes; pintarAutomaticos();
   })); }
+  if (!$('vPreguntar').hidden) tareas.push(api('preguntas').then(function (d) {
+    PREGS = d.preguntas; pintarPreguntas();
+  }));
   if (!$('vUsuarios').hidden) tareas.push(api('usuarios').then(function (d) { USU = d; pintarUsuarios(); }));
   if (!$('vPedir').hidden) tareas.push(api('inicio').then(function (d) {
-    DATA.informes = d.informes; $('tAuto').hidden = !d.hay_automaticos; pintarInformes();
+    DATA.informes = d.informes; $('tAuto').hidden = !d.hay_automaticos;
+    $('tPreguntar').hidden = !d.puede_preguntar; pintarInformes();
   }));
   CLIENTES = null;                              // la lista de clientes se vuelve a pedir
   Promise.all(tareas).then(function () { toast('Actualizado'); })
@@ -401,6 +417,7 @@ function pintarPedidos() {
 }
 
 var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'],
+               preguntar: ['vPreguntar', 'tPreguntar'],
                mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'] };
 function ver(v) {
   for (var k in VISTAS) {
@@ -408,6 +425,7 @@ function ver(v) {
     $(VISTAS[k][1]).className = k === v ? 'act' : '';
   }
   if (v === 'auto') cargarAutomaticos();
+  if (v === 'preguntar') { pintarPreguntas(); cargarPreguntas(); }
   if (v === 'usuarios') cargarUsuarios();
   window.scrollTo(0, 0);
 }
@@ -443,6 +461,60 @@ function bajarAuto(clave, fid, boton) {
   api('archivo_auto', { clave: clave, fid: fid }).then(function (a) { guardarArchivo(a); })
     .catch(function (e) { toast(e.message || 'No pude abrir el archivo.'); })
     .then(function () { boton.disabled = false; boton.innerHTML = txt; });
+}
+
+// ---------------------------------------------------------------- preguntar
+var EJEMPLOS = ['¿Cuánto me debe Bustorf?', '¿Qué locales vendieron más este mes?',
+                '¿Cuánto vendimos ayer?', '¿Qué cheques tengo que ingresar esta semana?'];
+
+function pintarPreguntas() {
+  var h = '<div class="preg-caja">' +
+    '<textarea id="fPreg" rows="2" placeholder="Preguntá sobre ventas, clientes, saldos o stock…" ' +
+    'oninput="autoAlto(this)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();enviarPregunta();}"></textarea>' +
+    '<button class="btn" id="bPreg" onclick="enviarPregunta()">Preguntar</button></div>';
+  if (!PREGS.length) {
+    h += '<div class="rubro">Para probar</div><div class="chips">' +
+      EJEMPLOS.map(function (e) {
+        return '<span class="chip" onclick="ponerPregunta(this)">' + esc(e) + '</span>';
+      }).join('') + '</div>';
+  }
+  h += PREGS.map(function (p) {
+    var cuerpo;
+    if (p.estado === 'listo') cuerpo = '<div class="preg-resp">' + esc(p.respuesta) + '</div>';
+    else if (p.estado === 'error') cuerpo = '<div class="preg-resp error">' + esc(p.respuesta ||
+      'No pude responder.') + '</div>';
+    else cuerpo = '<div class="preg-resp pensando">Pensando…</div>';
+    return '<div class="pedido"><div class="ped-top"><span class="ped-nom">' + esc(p.pregunta) + '</span>' +
+      '<span class="arch-fecha">' + esc(fechaCorta(p.creado)) + '</span></div>' + cuerpo + '</div>';
+  }).join('');
+  $('vPreguntar').innerHTML = h;
+}
+
+function autoAlto(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 150) + 'px'; }
+function ponerPregunta(c) { $('fPreg').value = c.textContent; $('fPreg').focus(); }
+
+function cargarPreguntas() {
+  api('preguntas').then(function (d) {
+    PREGS = d.preguntas; pintarPreguntas(); programarPreguntas();
+  }).catch(function () {});
+}
+function programarPreguntas() {
+  clearTimeout(timerPreg);
+  if ($('vPreguntar').hidden) return;
+  var activa = PREGS.some(function (p) { return p.estado === 'pendiente' || p.estado === 'pensando'; });
+  timerPreg = setTimeout(cargarPreguntas, activa ? 4000 : 30000);
+}
+function enviarPregunta() {
+  var t = ($('fPreg').value || '').trim();
+  if (!t) return;
+  var b = $('bPreg');
+  b.disabled = true; b.textContent = 'Enviando…';
+  api('preguntar', { pregunta: t }).then(function (d) {
+    PREGS = d.preguntas; pintarPreguntas(); programarPreguntas();
+    if (!d.robot.en_linea) toast('La notebook no responde: contesta cuando vuelva.');
+  }).catch(function (e) {
+    b.disabled = false; b.textContent = 'Preguntar'; toast(e.message || e);
+  });
 }
 
 // ---------------------------------------------------------------- usuarios (admin)
