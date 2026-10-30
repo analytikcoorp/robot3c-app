@@ -563,7 +563,9 @@ function enviarPregunta() {
   b.disabled = true; b.textContent = 'Enviando…';
   api('preguntar', { pregunta: t }).then(function (d) {
     PREGS = d.preguntas; pintarPreguntas(); programarPreguntas();
-    if (!d.robot.en_linea) toast('La notebook no responde: contesta cuando vuelva.');
+    // le avisa al servidor que arranque ya; si contesta la notebook, no hace nada
+    api('pensar').catch(function () {});
+    if (!d.robot.en_linea && !d.nube) toast('La notebook no responde: contesta cuando vuelva.');
   }).catch(function (e) {
     b.disabled = false; b.textContent = 'Preguntar'; toast(e.message || e);
   });
