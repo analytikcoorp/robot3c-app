@@ -44,13 +44,14 @@
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink);
+  html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: hidden;
     font: 15px/1.45 "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   .num { font-variant-numeric: tabular-nums; }
   button { font: inherit; color: inherit; }
   header { position: sticky; top: 0; z-index: 5; background: var(--brand); color: var(--brand-ink);
     padding: calc(env(safe-area-inset-top) + 12px) 16px 12px; display: flex; align-items: center; gap: 10px; }
-  header .marca { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; }
+  header .marca { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; overflow: hidden; }
+  header .marca > div { min-width: 0; }
   header .logo { height: 26px; width: auto; display: block; flex: none; }
   .fecha { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
     text-transform: uppercase; color: var(--brand-label); line-height: 1.3;
@@ -58,7 +59,7 @@
   .hola { display: block; font-size: 14.5px; font-weight: 600; letter-spacing: -.01em;
     color: var(--brand-ink); line-height: 1.2;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .estado { font-size: 12px; font-weight: 600; letter-spacing: .03em; padding: 5px 11px;
+  .estado { font-size: 12px; font-weight: 600; letter-spacing: .03em; padding: 5px 11px; max-width: 45%;
     border-radius: 100px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
     display: flex; align-items: center; gap: 6px; white-space: nowrap; cursor: pointer; flex: none; }
   .punto { width: 6px; height: 6px; border-radius: 50%; background: var(--brand-label); }
@@ -70,6 +71,7 @@
   @keyframes giro { to { transform: rotate(360deg); } }
   .estado.on .punto { background: #8fe08f; box-shadow: 0 0 0 3px rgba(143,224,143,.22); }
   .estado.off .punto { background: #f0a0a0; }
+  #estadoTxt { overflow: hidden; text-overflow: ellipsis; }
   main { padding: 14px 16px calc(84px + env(safe-area-inset-bottom)); max-width: 760px; margin: 0 auto; }
   .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 10px 12px;
     font-size: 13.5px; margin-bottom: 12px; display: none; }
@@ -110,8 +112,10 @@
   .vacio { text-align: center; color: var(--muted); padding: 40px 10px; }
   nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
     display: flex; padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
-  nav button { flex: 1; border: 0; background: none; padding: 10px 0 12px; color: var(--muted); font-size: 12px;
+  nav button { flex: 1 1 0; min-width: 0; border: 0; background: none; padding: 10px 2px 12px;
+    color: var(--muted); font-size: 11.5px; line-height: 1.2; text-align: center;
     display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; position: relative; }
+  nav button .t { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   nav button .i { font-size: 20px; }
   nav button.act { color: var(--accent); font-weight: 700; }
   nav button span.i { opacity: .85; }
@@ -162,6 +166,21 @@
   .toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
     background: var(--brand); color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 20;
     display: none; max-width: calc(100% - 32px); }
+  @media (max-width: 400px) {
+    header { gap: 6px; padding-inline: 12px; }
+    header .logo { height: 22px; }
+    .fecha { font-size: 10.5px; letter-spacing: .04em; }
+    .hola { font-size: 13.5px; }
+    .recargar { width: 30px; height: 30px; font-size: 15px; }
+    main { padding-inline: 12px; }
+    nav button { font-size: 10.5px; }
+    nav button .i { font-size: 18px; }
+  }
+  @media (max-width: 365px) {
+    .estado { padding: 6px; }
+    #estadoTxt { display: none; }
+    nav button { font-size: 9.8px; letter-spacing: -.01em; }
+  }
   /* ingreso */
   #login { position: fixed; inset: 0; background: var(--bg); z-index: 30; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
@@ -202,11 +221,11 @@
 </main>
 
 <nav hidden id="barra">
-  <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span>Pedir</button>
-  <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span>Automáticos</button>
-  <button id="tPreguntar" hidden onclick="ver('preguntar')"><span class="i">💬</span>Preguntar</button>
-  <button id="tMios" onclick="ver('mios')"><span class="i">📥</span>Mis informes<span class="cont" id="cont"></span></button>
-  <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span>Usuarios</button>
+  <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
+  <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
+  <button id="tPreguntar" hidden onclick="ver('preguntar')"><span class="i">💬</span><span class="t">Preguntar</span></button>
+  <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
+  <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
 </nav>
 
 <div class="velo" id="velo" onclick="cerrarHoja()"></div>
