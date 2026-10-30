@@ -97,6 +97,13 @@
   .b-generando { background: var(--run-bg); color: var(--run); }
   .b-listo { background: var(--ok-bg); color: var(--ok); }
   .b-error, .b-cancelado { background: var(--bad-bg); color: var(--bad); }
+  .hoy { border-radius: 14px; padding: 11px 14px; margin-bottom: 12px; display: flex;
+    flex-direction: column; gap: 2px; border: 1px solid var(--line-fuerte); }
+  .hoy-t { font-size: 13.5px; font-weight: 700; letter-spacing: -.01em; }
+  .hoy-d { font-size: 12.5px; opacity: .9; }
+  .hoy-bien { background: var(--ok-bg); color: var(--ok); }
+  .hoy-espera { background: var(--warn-bg); color: var(--warn); }
+  .hoy-mal { background: var(--bad-bg); color: var(--bad); }
   .ped-msg { font-size: 13.5px; margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .ped-acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .btn { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 600; letter-spacing: .01em; cursor: pointer;
@@ -460,18 +467,44 @@ function cargarAutomaticos() {
   api('automaticos').then(function (d) { AUTOS = d.informes; pintarAutomaticos(); })
     .catch(function (e) { $('vAuto').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>'; });
 }
+var ETIQUETA_ESTADO = { ok: ['b-listo', 'Llegó hoy'], esperando: ['b-pendiente', 'Pendiente'],
+                        falta: ['b-error', 'No llegó'] };
+
+/** Resumen de arriba: qué informes de hoy llegaron y cuáles no. */
+function resumenHoy() {
+  var faltan = [], esperando = [], llegaron = 0, control = 0;
+  AUTOS.forEach(function (a) {
+    if (!a.estado || a.estado === 'na') return;
+    control++;
+    if (a.estado === 'ok') llegaron++;
+    else if (a.estado === 'falta') faltan.push(a.nombre);
+    else esperando.push(a.nombre);
+  });
+  if (!control) return '';
+  var clase = faltan.length ? 'hoy-mal' : (esperando.length ? 'hoy-espera' : 'hoy-bien');
+  var titulo = faltan.length ? 'Falta el informe de hoy'
+             : (esperando.length ? 'Al día, con informes pendientes' : 'Todos los informes de hoy llegaron');
+  var detalle = faltan.length ? faltan.join(' · ')
+              : (esperando.length ? 'Todavía no corrió: ' + esperando.join(' · ')
+                                  : llegaron + ' de ' + control);
+  return '<div class="hoy ' + clase + '"><span class="hoy-t">' + esc(titulo) + '</span>' +
+         '<span class="hoy-d">' + esc(detalle) + '</span></div>';
+}
+
 function pintarAutomaticos() {
   if (!AUTOS || !AUTOS.length) {
     $('vAuto').innerHTML = '<div class="vacio">No tenés informes automáticos habilitados.</div>'; return;
   }
-  $('vAuto').innerHTML = AUTOS.map(function (a) {
+  $('vAuto').innerHTML = resumenHoy() + AUTOS.map(function (a) {
     var arch = a.archivos.length ? a.archivos.map(function (f) {
       return '<button class="btn sec arch" onclick="bajarAuto(\'' + esc(a.clave) + '\',\'' +
         esc(f.fid) + '\',this)"><span class="arch-nom">' + esc(f.titulo || f.nombre) + '</span>' +
         '<span class="arch-fecha">' + esc(fechaCorta(f.fecha)) + '</span></button>';
     }).join('') : '<div class="ped-sub">Todavía no llegó ninguno.</div>';
+    var e = ETIQUETA_ESTADO[a.estado];
+    var marca = e ? '<span class="badge ' + e[0] + '">' + e[1] + '</span>' : '';
     return '<div class="pedido"><div class="ped-top"><span class="ped-nom">' +
-      esc(a.dibujo || '📄') + ' ' + esc(a.nombre) + '</span></div>' + arch + '</div>';
+      esc(a.dibujo || '📄') + ' ' + esc(a.nombre) + '</span>' + marca + '</div>' + arch + '</div>';
   }).join('');
 }
 function bajarAuto(clave, fid, boton) {
