@@ -367,7 +367,7 @@ function actualizar() {
   var tareas = [api('refrescar').then(function (d) {
     DATA.robot = d.robot; DATA.pedidos = d.pedidos; pintarEstado(); pintarPedidos(); programar();
   })];
-  if (!$('vAuto').hidden) { AUTOS = null; tareas.push(api('automaticos').then(function (d) {
+  if (!$('vAuto').hidden) { AUTOS = null; tareas.push(api('automaticos', { fresco: 1 }).then(function (d) {
     AUTOS = d.informes; pintarAutomaticos();
   })); }
   if (!$('vPreguntar').hidden) tareas.push(api('preguntas').then(function (d) {
