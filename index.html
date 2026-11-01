@@ -316,6 +316,12 @@ function salir(msg) {
   $('loginErr').textContent = msg || '';
 }
 function menuCuenta() {
+  var avisos = window.OneSignal && OneSignal.Notifications && !OneSignal.Notifications.permission;
+  if (avisos && confirm('Sesión de ' + (DATA.usuario.nombre || '') +
+                        '.\n\n¿Querés recibir avisos en este teléfono cuando esté listo un ' +
+                        'informe?\n\nAceptar: activar los avisos. Cancelar: nada.')) {
+    pedirAvisos(); return;
+  }
   if (confirm('Sesión de ' + (DATA.usuario.nombre || '') + '.\n¿Querés salir?')) salir();
 }
 
@@ -328,6 +334,40 @@ function entrarApp(d) {
   $('tPreguntar').hidden = !d.puede_preguntar;
   $('tUsuarios').hidden = d.usuario.rol !== 'admin';
   pintarEstado(); pintarInformes(); pintarPedidos(); programar();
+  prepararAvisos(d.push, d.usuario.email);
+}
+
+/**
+ * Notificaciones al celular. El App ID lo manda el servidor, así que si todavía no
+ * está cargado en la planilla esto no hace nada y la app funciona igual.
+ * El service worker de OneSignal vive en push/ para no chocar con el nuestro.
+ */
+var AVISOS_LISTO = false;
+function prepararAvisos(appId, email) {
+  if (!appId || AVISOS_LISTO || !('serviceWorker' in navigator)) return;
+  AVISOS_LISTO = true;
+  var s = document.createElement('script');
+  s.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+  s.defer = true;
+  document.head.appendChild(s);
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.OneSignalDeferred.push(function (OneSignal) {
+    OneSignal.init({ appId: appId,
+                     serviceWorkerPath: 'push/OneSignalSDKWorker.js',
+                     serviceWorkerParam: { scope: location.pathname.replace(/[^/]*$/, '') + 'push/' } })
+      .then(function () { return OneSignal.login(String(email).toLowerCase()); })
+      .catch(function () { /* sin avisos, la app anda igual */ });
+  });
+}
+
+/** Pide permiso para los avisos. Se llama desde el menú de la cuenta. */
+function pedirAvisos() {
+  if (!window.OneSignal || !OneSignal.Notifications) {
+    toast('Las notificaciones todavía no están configuradas.'); return;
+  }
+  OneSignal.Notifications.requestPermission()
+    .then(function () { toast(OneSignal.Notifications.permission ? 'Avisos activados' : 'Avisos rechazados'); })
+    .catch(function () { toast('No pude activar los avisos.'); });
 }
 
 function arrancar() {
