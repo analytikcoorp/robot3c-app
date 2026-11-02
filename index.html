@@ -316,13 +316,48 @@ function salir(msg) {
   $('loginErr').textContent = msg || '';
 }
 function menuCuenta() {
-  var avisos = window.OneSignal && OneSignal.Notifications && !OneSignal.Notifications.permission;
-  if (avisos && confirm('Sesión de ' + (DATA.usuario.nombre || '') +
-                        '.\n\n¿Querés recibir avisos en este teléfono cuando esté listo un ' +
-                        'informe?\n\nAceptar: activar los avisos. Cancelar: nada.')) {
-    pedirAvisos(); return;
-  }
-  if (confirm('Sesión de ' + (DATA.usuario.nombre || '') + '.\n¿Querés salir?')) salir();
+  var h = '<h2>' + esc(DATA.usuario.nombre || '') + '</h2>' +
+          '<div class="ped-sub">' + esc(DATA.usuario.email || '') + '</div>' +
+          '<div class="sub">Avisos en este teléfono</div>' +
+          '<div class="ped-msg" id="avEstado">' + esc(textoAvisos()) + '</div>' +
+          '<div class="acciones">' +
+          (puedeActivarAvisos() ? '<button class="btn" onclick="pedirAvisos()">Activar avisos</button>' : '') +
+          '<button class="btn sec" onclick="probarAviso(this)">Probar aviso</button></div>' +
+          '<div class="acciones" style="margin-top:18px">' +
+          '<button class="btn sec" onclick="cerrarHoja()">Cerrar</button>' +
+          '<button class="btn sec" onclick="cerrarHoja();salir()">Cerrar sesión</button></div>';
+  $('hoja').innerHTML = h;
+  $('velo').style.display = 'block';
+  requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
+}
+
+/** Por qué los avisos andan o no, en castellano. Sirve para no adivinar. */
+function textoAvisos() {
+  if (!DATA.push) return 'El servidor todavía no tiene cargado el App ID de OneSignal. ' +
+                         'Se carga en la planilla: Robot 3C › Cargar las notificaciones.';
+  if (!('serviceWorker' in navigator) || !('Notification' in window))
+    return 'Este navegador no admite avisos. En iPhone hay que abrir la app desde el ícono ' +
+           'de la pantalla de inicio, no desde Safari.';
+  if (!window.OneSignal || !OneSignal.Notifications)
+    return 'El servicio de avisos no terminó de cargar. Cerrá la app y volvé a abrirla; ' +
+           'si sigue igual, puede estar bloqueado el acceso a onesignal.com.';
+  if (Notification.permission === 'denied')
+    return 'Bloqueaste los avisos para este sitio. Hay que habilitarlos a mano en los ' +
+           'ajustes del navegador o del teléfono y volver a entrar.';
+  if (!OneSignal.Notifications.permission) return 'Todavía no activaste los avisos en este teléfono.';
+  return 'Activados. Si no llega ninguno, probá con el botón de acá abajo.';
+}
+function puedeActivarAvisos() {
+  return !!(DATA.push && window.OneSignal && OneSignal.Notifications &&
+            !OneSignal.Notifications.permission && Notification.permission !== 'denied');
+}
+function probarAviso(b) {
+  b.disabled = true; b.textContent = 'Mandando…';
+  api('probar_aviso').then(function (d) {
+    toast(d.ok ? 'Mandado. Tiene que llegarte en unos segundos.' : (d.error || 'No se pudo mandar.'));
+    if ($('avEstado')) $('avEstado').textContent = d.ok ? textoAvisos() : (d.error || '');
+  }).catch(function (e) { toast(e.message || e); })
+    .then(function () { b.disabled = false; b.textContent = 'Probar aviso'; });
 }
 
 function entrarApp(d) {
@@ -363,11 +398,19 @@ function prepararAvisos(appId, email) {
 /** Pide permiso para los avisos. Se llama desde el menú de la cuenta. */
 function pedirAvisos() {
   if (!window.OneSignal || !OneSignal.Notifications) {
-    toast('Las notificaciones todavía no están configuradas.'); return;
+    toast('El servicio de avisos no cargó todavía.'); return;
   }
   OneSignal.Notifications.requestPermission()
-    .then(function () { toast(OneSignal.Notifications.permission ? 'Avisos activados' : 'Avisos rechazados'); })
-    .catch(function () { toast('No pude activar los avisos.'); });
+    .then(function () {
+      if (!OneSignal.Notifications.permission) { toast('Avisos rechazados'); return null; }
+      return OneSignal.User.PushSubscription.optIn()
+        .then(function () { return OneSignal.login(String(DATA.usuario.email).toLowerCase()); });
+    })
+    .then(function () {
+      if ($('avEstado')) $('avEstado').textContent = textoAvisos();
+      if (OneSignal.Notifications.permission) toast('Avisos activados en este teléfono');
+    })
+    .catch(function (e) { toast('No pude activar los avisos: ' + (e && e.message ? e.message : e)); });
 }
 
 function arrancar() {
