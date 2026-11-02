@@ -44,7 +44,9 @@
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: hidden;
+  /* overflow-x: clip y no hidden: hidden convierte al body en contenedor de scroll y
+     en Safari deja de funcionar el position:sticky del encabezado */
+  html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: clip;
     font: 15px/1.45 "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   .num { font-variant-numeric: tabular-nums; }
   button { font: inherit; color: inherit; }
@@ -245,7 +247,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-02 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-02 · 3';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 
 function $(id) { return document.getElementById(id); }
@@ -321,8 +323,10 @@ function menuCuenta() {
           '<div class="ped-sub">' + esc(DATA.usuario.email || '') + '</div>' +
           '<div class="sub">Avisos en este teléfono</div>' +
           '<div class="ped-msg" id="avEstado">' + esc(textoAvisos()) + '</div>' +
+          '<div class="ped-sub" id="avDatos">' + esc(datosAvisos()) + '</div>' +
           '<div class="acciones">' +
-          (puedeActivarAvisos() ? '<button class="btn" onclick="pedirAvisos()">Activar avisos</button>' : '') +
+          '<button class="btn" onclick="pedirAvisos()">' +
+          (puedeActivarAvisos() ? 'Activar avisos' : 'Revincular este teléfono') + '</button>' +
           '<button class="btn sec" onclick="probarAviso(this)">Probar aviso</button></div>' +
           '<div class="acciones" style="margin-top:18px">' +
           '<button class="btn sec" onclick="cerrarHoja()">Cerrar</button>' +
@@ -349,6 +353,16 @@ function textoAvisos() {
   if (!OneSignal.Notifications.permission) return 'Todavía no activaste los avisos en este teléfono.';
   return 'Activados. Si no llega ninguno, probá con el botón de acá abajo.';
 }
+/** Lo que el teléfono tiene registrado. Si falta el mail, el servidor no sabe a quién mandarle. */
+function datosAvisos() {
+  try {
+    if (!window.OneSignal || !OneSignal.User) return '';
+    var sub = OneSignal.User.PushSubscription || {};
+    return 'Suscripción: ' + (sub.id ? String(sub.id).slice(0, 8) : 'sin registrar') +
+           ' · mail vinculado: ' + (OneSignal.User.externalId ? 'sí' : 'NO') +
+           ' · activa: ' + (sub.optedIn ? 'sí' : 'no');
+  } catch (e) { return ''; }
+}
 function puedeActivarAvisos() {
   if (!DATA.push || !window.OneSignal || !OneSignal.Notifications) return false;
   if (!('Notification' in window) || Notification.permission === 'denied') return false;
@@ -356,10 +370,14 @@ function puedeActivarAvisos() {
 }
 function probarAviso(b) {
   b.disabled = true; b.textContent = 'Mandando…';
+  var poner = function (t) { if ($('avEstado')) $('avEstado').textContent = t; };
+  poner('Mandando…');
   api('probar_aviso').then(function (d) {
-    toast(d.ok ? 'Mandado. Tiene que llegarte en unos segundos.' : (d.error || 'No se pudo mandar.'));
-    if ($('avEstado')) $('avEstado').textContent = d.ok ? textoAvisos() : (d.error || '');
-  }).catch(function (e) { toast(e.message || e); })
+    poner(d.ok ? 'Mandado a ' + (d.destinatarios != null ? d.destinatarios : 1) +
+                 ' teléfono(s). Si no llega, revisá que la app tenga permiso de notificaciones ' +
+                 'en los ajustes del teléfono.'
+               : (d.error || 'No se pudo mandar.'));
+  }).catch(function (e) { poner('Error del servidor: ' + (e.message || e)); })
     .then(function () { b.disabled = false; b.textContent = 'Probar aviso'; });
 }
 
@@ -401,8 +419,10 @@ function prepararAvisos(appId, email) {
 /** Pide permiso para los avisos. Se llama desde el menú de la cuenta. */
 function pedirAvisos() {
   if (!window.OneSignal || !OneSignal.Notifications) {
-    toast('El servicio de avisos no cargó todavía.'); return;
+    if ($('avEstado')) $('avEstado').textContent = 'El servicio de avisos no cargó todavía.';
+    return;
   }
+  if ($('avEstado')) $('avEstado').textContent = 'Pidiendo permiso…';
   OneSignal.Notifications.requestPermission()
     .then(function () {
       if (!OneSignal.Notifications.permission) { toast('Avisos rechazados'); return null; }
@@ -411,9 +431,12 @@ function pedirAvisos() {
     })
     .then(function () {
       if ($('avEstado')) $('avEstado').textContent = textoAvisos();
-      if (OneSignal.Notifications.permission) toast('Avisos activados en este teléfono');
+      if ($('avDatos')) $('avDatos').textContent = datosAvisos();
     })
-    .catch(function (e) { toast('No pude activar los avisos: ' + (e && e.message ? e.message : e)); });
+    .catch(function (e) {
+      if ($('avEstado')) $('avEstado').textContent =
+        'No pude activar los avisos: ' + (e && e.message ? e.message : e);
+    });
 }
 
 function arrancar() {
