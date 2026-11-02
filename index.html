@@ -245,6 +245,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
+var VERSION_APP = '2026-11-02 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 
 function $(id) { return document.getElementById(id); }
@@ -325,7 +326,8 @@ function menuCuenta() {
           '<button class="btn sec" onclick="probarAviso(this)">Probar aviso</button></div>' +
           '<div class="acciones" style="margin-top:18px">' +
           '<button class="btn sec" onclick="cerrarHoja()">Cerrar</button>' +
-          '<button class="btn sec" onclick="cerrarHoja();salir()">Cerrar sesión</button></div>';
+          '<button class="btn sec" onclick="cerrarHoja();salir()">Cerrar sesión</button></div>' +
+          '<div class="ped-sub" style="margin-top:14px">Versión ' + esc(VERSION_APP) + '</div>';
   $('hoja').innerHTML = h;
   $('velo').style.display = 'block';
   requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
@@ -348,8 +350,9 @@ function textoAvisos() {
   return 'Activados. Si no llega ninguno, probá con el botón de acá abajo.';
 }
 function puedeActivarAvisos() {
-  return !!(DATA.push && window.OneSignal && OneSignal.Notifications &&
-            !OneSignal.Notifications.permission && Notification.permission !== 'denied');
+  if (!DATA.push || !window.OneSignal || !OneSignal.Notifications) return false;
+  if (!('Notification' in window) || Notification.permission === 'denied') return false;
+  return !OneSignal.Notifications.permission;
 }
 function probarAviso(b) {
   b.disabled = true; b.textContent = 'Mandando…';
