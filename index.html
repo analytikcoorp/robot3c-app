@@ -173,9 +173,21 @@
   .leyenda { display: flex; gap: 14px; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
   .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px;
     margin-right: 5px; vertical-align: -1px; }
-  .tdias { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  .filtro-local { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+  .filtro-local .chip { font-size: 13px; font-weight: 700; }
+  .filtro-local .chip.act { background: var(--ok-bg); color: var(--ok); border-color: var(--ok);
+    font-weight: 800; }
+  .proy { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px;
+    color: var(--muted); }
+  .proy b { color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .proy button { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line-fuerte);
+    background: var(--card); color: var(--accent); font-size: 17px; font-weight: 800; line-height: 1;
+    cursor: pointer; }
+  .tdias { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 8px; }
+  /* la tabla es larga: los títulos quedan pegados abajo del encabezado al bajar */
   .tdias th { text-align: right; color: var(--muted); font-size: 10.5px; text-transform: uppercase;
-    padding: 4px 0; border-bottom: 1px solid var(--line); font-weight: 800; }
+    padding: 6px 0; border-bottom: 1px solid var(--line-fuerte); font-weight: 800;
+    position: sticky; top: var(--alto-cab, 76px); background: var(--card); z-index: 2; }
   .tdias th:first-child, .tdias td:first-child { text-align: left; }
   .tdias td { text-align: right; padding: 5px 0; border-bottom: 1px solid var(--line); }
   .tdias .num { font-variant-numeric: tabular-nums; }
@@ -282,7 +294,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-03 · 2';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-03 · 4';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
@@ -749,14 +761,14 @@ function pintarTablero(guardado) {
            esc(x.titulo.charAt(0).toUpperCase() + x.titulo.slice(1)) + '</button>';
   }).join('') + '</div>';
 
-  var filtro = '<div class="chips" style="margin:10px 0 2px">' +
+  var filtro = '<div class="filtro-local">' +
     '<button class="chip' + (cual < 0 ? ' act' : '') + '" onclick="verLocal(-1)">Todos</button>' +
     loc.map(function (n, i) {
       return '<button class="chip' + (i === cual ? ' act' : '') + '" onclick="verLocal(' + i + ')">' +
              esc(n) + '</button>';
     }).join('') + '</div>';
 
-  var kpis = '<div class="kpis">' +
+  var kpis = '<div class="kpis" style="margin-top:10px">' +
     '<div class="kpi"><div class="r">Venta</div><div class="v">' + corta(actual) + '</div>' +
       '<div class="d" style="color:var(--muted)">' + dias + (dias === 1 ? ' día' : ' días') + '</div></div>' +
     '<div class="kpi"><div class="r">Año anterior</div><div class="v">' + corta(base) + '</div>' +
@@ -766,14 +778,14 @@ function pintarTablero(guardado) {
     '</div>';
 
   var cerrado = dias >= m.dias.length;
-  var pie = '<div class="ped-sub" style="margin-top:8px">' +
+  var pie = '<div class="ped-sub" style="margin:0 0 10px">' +
     (cerrado ? 'Mes completo.' : 'Van ' + dias + ' de ' + m.dias.length + ' días. ' +
       'Si sigue así, el mes cierra cerca de ' + corta(baseMes * (base ? actual / base : 1)) +
       ' (proyectado ' + corta(proyMes) + ').') +
     ' · Libro al ' + esc(TAB.al) + (guardado ? ' · buscando novedades…' : '') + '</div>';
 
-  $('vTablero').innerHTML = chips + kpis + pie + filtro +
-    grafLocales(m) + grafDias(m, corridos) + tablaDias(m, corridos);
+  $('vTablero').innerHTML = chips + filtro + pie + mandoPct() +
+    grafLocales(m) + kpis + tablaDias(m, corridos);
   // el mes elegido suele ser el último: centrarlo en la tira, sin tocar el scroll de la página
   var tira = $('vTablero').querySelector('.meses');
   var elegido = tira && tira.querySelector('.mes-chip.act');
@@ -781,6 +793,32 @@ function pintarTablero(guardado) {
     var rt = tira.getBoundingClientRect(), re = elegido.getBoundingClientRect();
     tira.scrollLeft += (re.left - rt.left) - (rt.width - re.width) / 2;
   }
+}
+
+/** El % de incremento con el que se proyecta la venta. Lo cambian los administradores. */
+function mandoPct() {
+  var pct = (TAB.pct * 100).toFixed(1).replace('.', ',').replace(',0', '');
+  var admin = DATA.usuario && DATA.usuario.rol === 'admin';
+  if (!admin) return '<div class="proy">Proyección: <b>+' + pct + '%</b> sobre el año anterior</div>';
+  return '<div class="proy">Proyección sobre el año anterior:' +
+    '<button onclick="cambiarPct(-1)" aria-label="Bajar">−</button>' +
+    '<b>+' + pct + '%</b>' +
+    '<button onclick="cambiarPct(1)" aria-label="Subir">+</button></div>';
+}
+var timerPct = null;
+function cambiarPct(d) {
+  var n = Math.round(TAB.pct * 100) + d;
+  if (n < 0 || n > 200) return;
+  TAB.pct = n / 100;
+  pintarTablero();
+  clearTimeout(timerPct);
+  timerPct = setTimeout(function () {          // se guarda una sola vez, al dejar de tocar
+    api('pct_tablero', { pct: TAB.pct }).then(function () {
+      try { localStorage.setItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''),
+                                 JSON.stringify(TAB)); } catch (e) { /* no es grave */ }
+      toast('Proyección guardada');
+    }).catch(function (e) { toast(e.message || e); });
+  }, 900);
 }
 
 /** Barras horizontales: cada local, lo que vendió contra el mismo período del año anterior. */
@@ -797,84 +835,51 @@ function grafLocales(m) {
   }
   if (!tope) return '';
   filas.sort(function (x, y) { return y.a - x.a; });
-  var alto = filas.length * 34 + 6, ancho = 360, xIni = 86, xFin = 300;
-  var s = '<svg viewBox="0 0 ' + ancho + ' ' + alto + '" role="img" aria-label="Venta por local">';
+  var ALTO = 30, ancho = 360, xBar = 0, anchoBar = 360;
+  var s = '<svg viewBox="0 0 ' + ancho + ' ' + (filas.length * ALTO) + '" role="img" aria-label="Venta por local">';
   filas.forEach(function (f, i) {
-    var y = i * 34 + 6;
-    var la = (xFin - xIni) * (f.a / tope), lb = (xFin - xIni) * (f.b / tope);
-    s += '<text x="0" y="' + (y + 11) + '" font-size="11" font-weight="700" fill="var(--ink)">' +
-         esc(f.n) + '</text>';
-    s += '<rect x="' + xIni + '" y="' + y + '" width="' + Math.max(lb, 1) + '" height="7" rx="3" fill="var(--line-fuerte)"/>';
-    s += '<rect x="' + xIni + '" y="' + (y + 10) + '" width="' + Math.max(la, 1) + '" height="11" rx="4" fill="var(--accent)"/>';
+    var y = i * ALTO;
     var cl = claseDif(f.a, f.b);
-    s += '<text x="' + ancho + '" y="' + (y + 15) + '" text-anchor="end" font-size="11" font-weight="800" ' +
-         'fill="' + (cl === 'sube' ? 'var(--ok)' : cl === 'baja' ? 'var(--bad)' : 'var(--muted)') + '">' +
-         dif(f.a, f.b) + '</text>';
-    s += '<text x="' + xIni + '" y="' + (y + 31) + '" font-size="10" fill="var(--muted)">' +
-         corta(f.a) + (f.b ? ' vs ' + corta(f.b) : ' · sin año anterior') + '</text>';
+    // primero se lee: nombre - importe - porcentaje; la barra va abajo, fina
+    s += '<text x="0" y="' + (y + 10) + '" font-size="11.5" font-weight="700" fill="var(--ink)">' +
+         esc(f.n) + '</text>';
+    s += '<text x="212" y="' + (y + 10) + '" text-anchor="end" font-size="11.5" font-weight="700" ' +
+         'fill="var(--ink)">' + corta(f.a) + '</text>';
+    s += '<text x="292" y="' + (y + 10) + '" text-anchor="end" font-size="11" ' +
+         'fill="var(--muted)">' + (f.b ? corta(f.b) : '—') + '</text>';
+    s += '<text x="' + ancho + '" y="' + (y + 10) + '" text-anchor="end" font-size="11.5" ' +
+         'font-weight="800" fill="' + (cl === 'sube' ? 'var(--ok)' : cl === 'baja' ? 'var(--bad)' :
+         'var(--muted)') + '">' + dif(f.a, f.b) + '</text>';
+    var la = anchoBar * (f.a / tope), lb = anchoBar * (f.b / tope);
+    s += '<rect x="' + xBar + '" y="' + (y + 15) + '" width="' + Math.max(la, 1) +
+         '" height="6" rx="3" fill="var(--accent)"/>';
+    s += '<rect x="' + xBar + '" y="' + (y + 23) + '" width="' + Math.max(lb, 1) +
+         '" height="3" rx="1.5" fill="var(--line-fuerte)"/>';
   });
   s += '</svg>';
   return '<div class="graf"><h4>Por local</h4>' +
-    '<div class="ped-sub">Mismos días del año anterior.</div>' + s +
+    '<div class="ped-sub">Este año · año anterior · diferencia. Mismos días del año anterior.</div>' + s +
     '<div class="leyenda"><span><i style="background:var(--accent)"></i>Este año</span>' +
     '<span><i style="background:var(--line-fuerte)"></i>Año anterior</span></div></div>';
-}
-
-/** Barras por día, con la línea de lo proyectado. */
-function grafDias(m, corridos) {
-  if (!corridos.length) return '';
-  var cual = TAB_LOCAL, ancho = 360, alto = 150, base0 = 120;
-  var tope = 0, puntos = [];
-  for (var i = 0; i < m.dias.length; i++) {
-    var d = m.dias[i];
-    var a = diaTotal(d, cual, 'a'), b = (diaTotal(d, cual, 'b') || 0) * (1 + TAB.pct);
-    puntos.push({ d: d.d, a: a, p: b });
-    tope = Math.max(tope, a || 0, b);
-  }
-  if (!tope) return '';
-  var w = ancho / puntos.length, bw = Math.max(2, Math.min(14, w - 2));
-  var s = '<svg viewBox="0 0 ' + ancho + ' ' + alto + '" role="img" aria-label="Venta día a día">';
-  s += '<line x1="0" y1="' + base0 + '" x2="' + ancho + '" y2="' + base0 + '" stroke="var(--line)"/>';
-  var linea = '';
-  puntos.forEach(function (p, i) {
-    var x = i * w + (w - bw) / 2, cx = i * w + w / 2;
-    if (p.a !== null) {
-      var h = Math.max(1, (p.a / tope) * (base0 - 10));
-      s += '<rect x="' + x.toFixed(1) + '" y="' + (base0 - h).toFixed(1) + '" width="' + bw.toFixed(1) +
-           '" height="' + h.toFixed(1) + '" rx="2" fill="' +
-           (p.a >= p.p ? 'var(--ok)' : 'var(--accent)') + '"><title>' + p.d + ': ' + guita(p.a) +
-           '</title></rect>';
-    }
-    var yp = base0 - (p.p / tope) * (base0 - 10);
-    linea += (linea ? ' L' : 'M') + cx.toFixed(1) + ',' + yp.toFixed(1);
-  });
-  s += '<path d="' + linea + '" fill="none" stroke="var(--tenue)" stroke-width="1.5" ' +
-       'stroke-dasharray="4 3"/>';
-  puntos.forEach(function (p, i) {
-    if (p.d % 5 !== 0 && p.d !== 1) return;
-    s += '<text x="' + (i * w + w / 2).toFixed(1) + '" y="' + (base0 + 14) +
-         '" text-anchor="middle" font-size="10" fill="var(--muted)">' + p.d + '</text>';
-  });
-  s += '</svg>';
-  var cual2 = cual < 0 ? 'Todos los locales' : TAB.locales[cual];
-  return '<div class="graf"><h4>Día a día · ' + esc(cual2) + '</h4>' +
-    '<div class="ped-sub">En verde los días que superaron lo proyectado.</div>' + s +
-    '<div class="leyenda"><span><i style="background:var(--ok)"></i>Sobre lo proyectado</span>' +
-    '<span><i style="background:var(--accent)"></i>Abajo</span>' +
-    '<span><i style="background:var(--tenue)"></i>Proyectado</span></div></div>';
 }
 
 function tablaDias(m, corridos) {
   if (!corridos.length) return '';
   var cual = TAB_LOCAL;
   var f = corridos.slice().reverse().map(function (d) {
-    var a = diaTotal(d, cual, 'a'), b = diaTotal(d, cual, 'b') || 0;
-    return '<tr><td>' + d.d + '</td><td class="num">' + guita(a) + '</td>' +
+    var a = diaTotal(d, cual, 'a');
+    var b = diaTotal(d, cual, 'b') || 0;
+    var pr = b * (1 + TAB.pct);
+    return '<tr><td>' + d.d + '</td>' +
+      '<td class="num">' + guita(a) + '</td>' +
+      '<td class="num" style="color:var(--muted)">' + guita(pr) + '</td>' +
       '<td class="num" style="color:var(--muted)">' + guita(b) + '</td>' +
-      '<td class="num ' + claseDif(a, b) + '">' + dif(a, b) + '</td></tr>';
+      '<td class="num ' + claseDif(a, pr) + '">' + dif(a, pr) + '</td></tr>';
   }).join('');
-  return '<div class="graf"><h4>Día por día</h4><table class="tdias">' +
-    '<tr><th>Día</th><th>Venta</th><th>Año ant.</th><th>Dif.</th></tr>' + f + '</table></div>';
+  return '<div class="graf"><h4>Día por día</h4>' +
+    '<div class="ped-sub">El porcentaje compara la venta contra lo proyectado.</div>' +
+    '<table class="tdias"><tr><th>Día</th><th>Venta</th><th>Proyect.</th>' +
+    '<th>Año ant.</th><th>Dif.</th></tr>' + f + '</table></div>';
 }
 
 var ETIQUETA_ESTADO = { ok: ['b-listo', 'Llegó hoy'], esperando: ['b-pendiente', 'Pendiente'],
