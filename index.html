@@ -44,13 +44,14 @@
     }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  /* overflow-x: clip y no hidden: hidden convierte al body en contenedor de scroll y
-     en Safari deja de funcionar el position:sticky del encabezado */
+  /* overflow-x: clip y no hidden: hidden convierte al body en contenedor de scroll.
+     El encabezado va con position:fixed y no sticky (03/11/2026): sticky depende de que
+     ningún ancestro tenga overflow y en el Safari del celular no quedaba fijo. */
   html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: clip;
     font: 15px/1.45 "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   .num { font-variant-numeric: tabular-nums; }
   button { font: inherit; color: inherit; }
-  header { position: sticky; top: 0; z-index: 5; background: var(--brand); color: var(--brand-ink);
+  header { position: fixed; top: 0; left: 0; right: 0; z-index: 6; background: var(--brand); color: var(--brand-ink);
     padding: calc(env(safe-area-inset-top) + 12px) 16px 12px; display: flex; align-items: center; gap: 10px; }
   header .marca { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; overflow: hidden; }
   header .marca > div { min-width: 0; }
@@ -74,7 +75,9 @@
   .estado.on .punto { background: #8fe08f; box-shadow: 0 0 0 3px rgba(143,224,143,.22); }
   .estado.off .punto { background: #f0a0a0; }
   #estadoTxt { overflow: hidden; text-overflow: ellipsis; }
-  main { padding: 14px 16px calc(84px + env(safe-area-inset-bottom)); max-width: 760px; margin: 0 auto; }
+  /* el alto real del encabezado lo mide medirCabecera() y lo deja en --alto-cab */
+  main { padding: calc(var(--alto-cab, 76px) + 14px) 16px calc(84px + env(safe-area-inset-bottom));
+    max-width: 760px; margin: 0 auto; }
   .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 10px 12px;
     font-size: 13.5px; margin-bottom: 12px; display: none; }
   .rubro { margin: 20px 2px 9px; font-size: 11.5px; font-weight: 800; color: var(--accent-claro);
@@ -247,8 +250,20 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-02 · 3';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-03 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
+
+// El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
+// no quedar tapado. Se mide de verdad (cambia con la muesca del celular y con la fuente).
+function medirCabecera() {
+  var c = $('cab');
+  if (!c || c.hidden) return;
+  var alto = c.offsetHeight;
+  if (alto) document.documentElement.style.setProperty('--alto-cab', alto + 'px');
+}
+window.addEventListener('resize', medirCabecera);
+window.addEventListener('orientationchange', function () { setTimeout(medirCabecera, 250); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(medirCabecera);
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -385,6 +400,7 @@ function entrarApp(d) {
   DATA = d;
   $('login').style.display = 'none';
   $('cab').hidden = $('cuerpo').hidden = $('barra').hidden = false;
+  medirCabecera();
   $('hola').textContent = 'Hola, ' + d.usuario.nombre;
   $('tAuto').hidden = !d.hay_automaticos;
   $('tPreguntar').hidden = !d.puede_preguntar;
@@ -476,8 +492,9 @@ function actualizar() {
   var tareas = [api('refrescar').then(function (d) {
     DATA.robot = d.robot; DATA.pedidos = d.pedidos; pintarEstado(); pintarPedidos(); programar();
   })];
-  if (!$('vAuto').hidden) { AUTOS = null; tareas.push(api('automaticos', { fresco: 1 }).then(function (d) {
+  if (!$('vAuto').hidden) { tareas.push(api('automaticos', { fresco: 1 }).then(function (d) {
     AUTOS = d.informes; pintarAutomaticos();
+    try { localStorage.setItem(claveAutos(), JSON.stringify(AUTOS)); } catch (e) { /* no es grave */ }
   })); }
   if (!$('vPreguntar').hidden) tareas.push(api('preguntas').then(function (d) {
     PREGS = d.preguntas; pintarPreguntas();
@@ -571,10 +588,30 @@ function fechaCorta(ms) {
   return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' · ' +
          d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
+function claveAutos() {
+  return 'autos_' + ((DATA.usuario && DATA.usuario.email) || '');
+}
 function cargarAutomaticos() {
-  $('vAuto').innerHTML = '<div class="vacio">Buscando lo último…</div>';
-  api('automaticos').then(function (d) { AUTOS = d.informes; pintarAutomaticos(); })
-    .catch(function (e) { $('vAuto').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>'; });
+  // Pedirle la lista al servidor tarda (recorre las carpetas de Drive). Mientras tanto se
+  // muestra lo último que se vio, guardado en el celular, y cuando llega lo nuevo se
+  // repinta. Así la pantalla abre al toque en vez de quedar en blanco. (03/11/2026)
+  if (!AUTOS) {
+    try {
+      var g = localStorage.getItem(claveAutos());
+      if (g) AUTOS = JSON.parse(g);
+    } catch (e) { /* sin guardado: se espera al servidor */ }
+  }
+  if (AUTOS && AUTOS.length) pintarAutomaticos(true);
+  else $('vAuto').innerHTML = '<div class="vacio">Buscando lo último…</div>';
+  api('automaticos').then(function (d) {
+    AUTOS = d.informes;
+    try { localStorage.setItem(claveAutos(), JSON.stringify(AUTOS)); } catch (e) { /* no es grave */ }
+    pintarAutomaticos();
+  }).catch(function (e) {
+    if (!(AUTOS && AUTOS.length)) {
+      $('vAuto').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>';
+    }
+  });
 }
 var ETIQUETA_ESTADO = { ok: ['b-listo', 'Llegó hoy'], esperando: ['b-pendiente', 'Pendiente'],
                         falta: ['b-error', 'No llegó'] };
@@ -600,11 +637,12 @@ function resumenHoy() {
          '<span class="hoy-d">' + esc(detalle) + '</span></div>';
 }
 
-function pintarAutomaticos() {
+function pintarAutomaticos(guardado) {
   if (!AUTOS || !AUTOS.length) {
     $('vAuto').innerHTML = '<div class="vacio">No tenés informes automáticos habilitados.</div>'; return;
   }
-  $('vAuto').innerHTML = resumenHoy() + AUTOS.map(function (a) {
+  var aviso = guardado ? '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste · buscando novedades…</div>' : '';
+  $('vAuto').innerHTML = resumenHoy() + aviso + AUTOS.map(function (a) {
     var arch = a.archivos.length ? a.archivos.map(function (f) {
       return '<button class="btn sec arch" onclick="bajarAuto(\'' + esc(a.clave) + '\',\'' +
         esc(f.fid) + '\',this)"><span class="arch-nom">' + esc(f.titulo || f.nombre) + '</span>' +
@@ -698,7 +736,9 @@ function pintarUsuarios() {
       (!p.activo ? 'Inactivo' : (p.rol === 'admin' ? 'Administrador' : 'Usuario')) + '</span></div>' +
       '<div class="ped-sub">' + esc(p.email) + '</div>' +
       '<div class="ped-sub">Informes: ' + esc(cuantos(p.informes, USU.catalogo.length)) +
-      ' · Automáticos: ' + esc(cuantos(p.automaticos, USU.automaticos.length)) + '</div>' +
+      ' · Automáticos: ' + esc(cuantos(p.automaticos, USU.automaticos.length)) +
+      ' · Carpetas: ' + esc(p.carpetas ? cuantos(p.carpetas, (USU.carpetas || []).length) : 'ninguna') +
+      '</div>' +
       '<div class="ped-acc"><button class="btn sec" onclick="editarUsuario(' + n + ')">Editar</button></div></div>';
   }).join('');
   h += '<div class="ped-acc" style="margin-top:14px"><button class="btn" onclick="editarUsuario(-1)">+ Agregar persona</button></div>';
@@ -713,7 +753,8 @@ function casillas(lista, permitidos, prefijo) {
   }).join('');
 }
 function editarUsuario(n) {
-  var p = n < 0 ? { nombre: '', email: '', rol: 'usuario', informes: '', automaticos: '', activo: true }
+  var p = n < 0 ? { nombre: '', email: '', rol: 'usuario', informes: '', automaticos: '',
+                    carpetas: '', activo: true }
                 : USU.usuarios[n];
   EDIT = p;
   var porRubro = {}, orden = [];
@@ -738,6 +779,13 @@ function editarUsuario(n) {
   h += '<div class="sub">Informes automáticos</div><div class="chks">' +
        '<label class="chk"><input type="checkbox" onclick="marcarTodo(this, \'ca\')">Todos</label></div>' +
        '<div class="chks">' + casillas(USU.automaticos, p.automaticos, 'ca') + '</div>';
+  if ((USU.carpetas || []).length) {
+    h += '<div class="sub">Carpetas de Drive que puede consultar</div>' +
+         '<div class="ped-sub">El asistente solo busca adentro de las que tildes. ' +
+         'Sin ninguna, no accede a Drive.</div><div class="chks">' +
+         '<label class="chk"><input type="checkbox" onclick="marcarTodo(this, \'cd\')">Todas</label></div>' +
+         '<div class="chks">' + casillas(USU.carpetas, p.carpetas, 'cd') + '</div>';
+  }
   h += '<div class="acciones"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button>' +
        '<button class="btn" id="bGuardar" onclick="guardarUsuario()">Guardar</button></div>';
   $('hoja').innerHTML = h;
@@ -756,14 +804,15 @@ function marcadas(clase) {
 function guardarUsuario() {
   var b = $('bGuardar');
   b.disabled = true; b.textContent = 'Guardando…';
-  var inf = marcadas('ci'), aut = marcadas('ca');
+  var inf = marcadas('ci'), aut = marcadas('ca'), car = marcadas('cd');
   api('guardar_usuario', {
     email: EDIT.email || $('uMail').value,
     nombre: $('uNombre').value,
     rol: $('uAdmin').checked ? 'admin' : 'usuario',
     activo: $('uActivo').checked,
     informes: inf.length === USU.catalogo.length ? '*' : inf,
-    automaticos: aut.length === USU.automaticos.length ? '*' : aut
+    automaticos: aut.length === USU.automaticos.length ? '*' : aut,
+    carpetas: car.length === (USU.carpetas || []).length && car.length ? '*' : car
   }).then(function (d) {
     USU = d; cerrarHoja(); pintarUsuarios(); toast('Guardado');
   }).catch(function (e) {
