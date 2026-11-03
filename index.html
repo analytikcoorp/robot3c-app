@@ -149,6 +149,36 @@
     border-radius: 10px; padding: 11px 12px; }
   textarea { min-height: 76px; resize: vertical; }
   .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* ---- tablero de ventas ---- */
+  .meses { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: 2px 0 10px;
+    scrollbar-width: none; }
+  .meses::-webkit-scrollbar { display: none; }
+  .mes-chip { flex: 0 0 auto; border: 1px solid var(--line-fuerte); background: var(--card);
+    color: var(--muted); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700;
+    white-space: nowrap; cursor: pointer; }
+  .mes-chip.act { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .kpi { background: var(--card); border-radius: 12px; padding: 10px; box-shadow: var(--shadow);
+    min-width: 0; }
+  .kpi .r { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px;
+    font-weight: 800; }
+  .kpi .v { font-size: 15.5px; font-weight: 800; margin-top: 3px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  .kpi .d { font-size: 12px; font-weight: 700; margin-top: 1px; }
+  .sube { color: var(--ok); } .baja { color: var(--bad); }
+  .graf { background: var(--card); border-radius: 14px; padding: 12px; margin-top: 10px;
+    box-shadow: var(--shadow); }
+  .graf h4 { margin: 0 0 2px; font-size: 13.5px; }
+  .graf svg { width: 100%; height: auto; display: block; margin-top: 8px; overflow: visible; }
+  .leyenda { display: flex; gap: 14px; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+    margin-right: 5px; vertical-align: -1px; }
+  .tdias { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  .tdias th { text-align: right; color: var(--muted); font-size: 10.5px; text-transform: uppercase;
+    padding: 4px 0; border-bottom: 1px solid var(--line); font-weight: 800; }
+  .tdias th:first-child, .tdias td:first-child { text-align: left; }
+  .tdias td { text-align: right; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .tdias .num { font-variant-numeric: tabular-nums; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .chip { border: 1px solid var(--line-fuerte); background: var(--card-2); color: var(--accent);
     border-radius: 100px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -227,6 +257,7 @@
   <div class="aviso" id="aviso"></div>
   <section id="vPedir"></section>
   <section id="vAuto" hidden></section>
+  <section id="vTablero" hidden></section>
   <section id="vPreguntar" hidden></section>
   <section id="vMios" hidden></section>
   <section id="vUsuarios" hidden></section>
@@ -235,6 +266,7 @@
 <nav hidden id="barra">
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
   <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
+  <button id="tTablero" hidden onclick="ver('tablero')"><span class="i">📈</span><span class="t">Tablero</span></button>
   <button id="tPreguntar" hidden onclick="ver('preguntar')"><span class="i">💬</span><span class="t">Preguntar</span></button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
   <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
@@ -250,7 +282,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-03 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-03 · 2';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
@@ -403,6 +435,7 @@ function entrarApp(d) {
   medirCabecera();
   $('hola').textContent = 'Hola, ' + d.usuario.nombre;
   $('tAuto').hidden = !d.hay_automaticos;
+  $('tTablero').hidden = !d.hay_tablero;
   $('tPreguntar').hidden = !d.puede_preguntar;
   $('tUsuarios').hidden = d.usuario.rol !== 'admin';
   pintarEstado(); pintarInformes(); pintarPedidos(); programar();
@@ -502,6 +535,7 @@ function actualizar() {
   if (!$('vUsuarios').hidden) tareas.push(api('usuarios').then(function (d) { USU = d; pintarUsuarios(); }));
   if (!$('vPedir').hidden) tareas.push(api('inicio').then(function (d) {
     DATA.informes = d.informes; $('tAuto').hidden = !d.hay_automaticos;
+    $('tTablero').hidden = !d.hay_tablero;
     $('tPreguntar').hidden = !d.puede_preguntar; pintarInformes();
   }));
   CLIENTES = null;                              // la lista de clientes se vuelve a pedir
@@ -568,7 +602,7 @@ function pintarPedidos() {
   }).join('');
 }
 
-var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'],
+var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: ['vTablero', 'tTablero'],
                preguntar: ['vPreguntar', 'tPreguntar'],
                mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'] };
 function ver(v) {
@@ -577,6 +611,7 @@ function ver(v) {
     $(VISTAS[k][1]).className = k === v ? 'act' : '';
   }
   if (v === 'auto') cargarAutomaticos();
+  if (v === 'tablero') cargarTablero();
   if (v === 'preguntar') { pintarPreguntas(); cargarPreguntas(); }
   if (v === 'usuarios') cargarUsuarios();
   window.scrollTo(0, 0);
@@ -613,6 +648,235 @@ function cargarAutomaticos() {
     }
   });
 }
+// ---------------------------------------------------------------- tablero de ventas
+// Los números salen de tablero_ventas.json, que el servidor rearma todas las noches del
+// libro "Vtas diarias por local por mes". Acá no se pide nada a 3C: solo se dibuja.
+var TAB = null, TAB_MES = -1, TAB_LOCAL = -1;   // -1 en local = todos los locales juntos
+
+function guita(n) {
+  var s = Math.round(Math.abs(n)).toString();
+  var o = '';
+  for (var i = 0; i < s.length; i++) {
+    o += s.charAt(i);
+    var faltan = s.length - 1 - i;
+    if (faltan > 0 && faltan % 3 === 0) o += '.';
+  }
+  return (n < 0 ? '-$' : '$') + o;
+}
+function corta(n) {                      // $12,3 M — para que entre en el celular
+  var a = Math.abs(n);
+  if (a >= 1e6) return (n < 0 ? '-' : '') + '$' + (a / 1e6).toFixed(1).replace('.', ',') + ' M';
+  if (a >= 1e3) return (n < 0 ? '-' : '') + '$' + Math.round(a / 1e3) + ' k';
+  return guita(n);
+}
+function porc(a, b) { return b ? (a / b - 1) * 100 : 0; }
+function signo(p) { return (p >= 0 ? '+' : '') + p.toFixed(1).replace('.', ',') + '%'; }
+// Si el año anterior es 0 (un local que todavía no existía, o que estuvo cerrado todo el
+// período) no hay nada contra qué comparar: un "+0,0%" verde ahí miente.
+function dif(a, b) { return b ? signo(porc(a, b)) : (a ? 'nuevo' : '—'); }
+function claseDif(a, b) { return !b ? '' : (a >= b ? 'sube' : 'baja'); }
+
+function cargarTablero() {
+  if (!TAB) {
+    try {
+      var g = localStorage.getItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''));
+      if (g) TAB = JSON.parse(g);
+    } catch (e) { /* sin guardado */ }
+  }
+  if (TAB) pintarTablero(true);
+  else $('vTablero').innerHTML = '<div class="vacio">Buscando los números…</div>';
+  api('tablero').then(function (d) {
+    if (!d.tablero) {
+      if (!TAB) $('vTablero').innerHTML = '<div class="vacio">El tablero todavía no se armó. ' +
+        'En la planilla: Robot 3C › Rearmar el tablero de ventas.</div>';
+      return;
+    }
+    TAB = d.tablero; TAB_MES = -1;
+    try { localStorage.setItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''),
+                               JSON.stringify(TAB)); } catch (e) { /* no es grave */ }
+    pintarTablero();
+  }).catch(function (e) {
+    if (!TAB) $('vTablero').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>';
+  });
+}
+
+/** Suma de un día: todos los locales, o el elegido. Devuelve null si ese día no corrió. */
+function diaTotal(dia, cual, campo) {
+  var v = dia[campo];
+  if (!v) return null;
+  if (cual >= 0) return v[cual];
+  var s = 0;
+  for (var i = 0; i < v.length; i++) s += v[i];
+  return s;
+}
+
+function mesTablero() {
+  if (!TAB || !TAB.meses.length) return null;
+  if (TAB_MES < 0 || TAB_MES >= TAB.meses.length) {
+    TAB_MES = 0;                                   // el último mes con datos cargados
+    for (var i = TAB.meses.length - 1; i >= 0; i--) {
+      var m = TAB.meses[i], hay = false;
+      for (var j = 0; j < m.dias.length; j++) if (m.dias[j].a) hay = true;
+      if (hay) { TAB_MES = i; break; }
+    }
+  }
+  return TAB.meses[TAB_MES];
+}
+
+function verMes(i) { TAB_MES = i; pintarTablero(); window.scrollTo(0, 0); }
+function verLocal(i) { TAB_LOCAL = i; pintarTablero(); }
+
+function pintarTablero(guardado) {
+  var m = mesTablero();
+  if (!m) { $('vTablero').innerHTML = '<div class="vacio">No hay datos todavía.</div>'; return; }
+  var loc = TAB.locales, cual = TAB_LOCAL;
+
+  // ---- acumulados: solo los días que ya corrieron, para comparar peras con peras
+  var actual = 0, base = 0, baseMes = 0, dias = 0, corridos = [];
+  for (var i = 0; i < m.dias.length; i++) {
+    var d = m.dias[i];
+    baseMes += diaTotal(d, cual, 'b') || 0;
+    if (d.a) {
+      actual += diaTotal(d, cual, 'a'); base += diaTotal(d, cual, 'b') || 0;
+      dias++; corridos.push(d);
+    }
+  }
+  var proy = base * (1 + TAB.pct);
+  var proyMes = baseMes * (1 + TAB.pct);
+
+  var chips = '<div class="meses">' + TAB.meses.map(function (x, i) {
+    return '<button class="mes-chip' + (i === TAB_MES ? ' act' : '') + '" onclick="verMes(' + i + ')">' +
+           esc(x.titulo.charAt(0).toUpperCase() + x.titulo.slice(1)) + '</button>';
+  }).join('') + '</div>';
+
+  var filtro = '<div class="chips" style="margin:10px 0 2px">' +
+    '<button class="chip' + (cual < 0 ? ' act' : '') + '" onclick="verLocal(-1)">Todos</button>' +
+    loc.map(function (n, i) {
+      return '<button class="chip' + (i === cual ? ' act' : '') + '" onclick="verLocal(' + i + ')">' +
+             esc(n) + '</button>';
+    }).join('') + '</div>';
+
+  var kpis = '<div class="kpis">' +
+    '<div class="kpi"><div class="r">Venta</div><div class="v">' + corta(actual) + '</div>' +
+      '<div class="d" style="color:var(--muted)">' + dias + (dias === 1 ? ' día' : ' días') + '</div></div>' +
+    '<div class="kpi"><div class="r">Año anterior</div><div class="v">' + corta(base) + '</div>' +
+      '<div class="d ' + claseDif(actual, base) + '">' + dif(actual, base) + '</div></div>' +
+    '<div class="kpi"><div class="r">Proyectado</div><div class="v">' + corta(proy) + '</div>' +
+      '<div class="d ' + claseDif(actual, proy) + '">' + dif(actual, proy) + '</div></div>' +
+    '</div>';
+
+  var cerrado = dias >= m.dias.length;
+  var pie = '<div class="ped-sub" style="margin-top:8px">' +
+    (cerrado ? 'Mes completo.' : 'Van ' + dias + ' de ' + m.dias.length + ' días. ' +
+      'Si sigue así, el mes cierra cerca de ' + corta(baseMes * (base ? actual / base : 1)) +
+      ' (proyectado ' + corta(proyMes) + ').') +
+    ' · Libro al ' + esc(TAB.al) + (guardado ? ' · buscando novedades…' : '') + '</div>';
+
+  $('vTablero').innerHTML = chips + kpis + pie + filtro +
+    grafLocales(m) + grafDias(m, corridos) + tablaDias(m, corridos);
+  // el mes elegido suele ser el último: centrarlo en la tira, sin tocar el scroll de la página
+  var tira = $('vTablero').querySelector('.meses');
+  var elegido = tira && tira.querySelector('.mes-chip.act');
+  if (tira && elegido) {   // con rectángulos: offsetLeft se mide contra otro contenedor
+    var rt = tira.getBoundingClientRect(), re = elegido.getBoundingClientRect();
+    tira.scrollLeft += (re.left - rt.left) - (rt.width - re.width) / 2;
+  }
+}
+
+/** Barras horizontales: cada local, lo que vendió contra el mismo período del año anterior. */
+function grafLocales(m) {
+  var loc = TAB.locales, filas = [], tope = 0;
+  for (var i = 0; i < loc.length; i++) {
+    var a = 0, b = 0;
+    for (var j = 0; j < m.dias.length; j++) {
+      if (!m.dias[j].a) continue;
+      a += m.dias[j].a[i]; b += m.dias[j].b[i];
+    }
+    filas.push({ n: loc[i], a: a, b: b });
+    tope = Math.max(tope, a, b);
+  }
+  if (!tope) return '';
+  filas.sort(function (x, y) { return y.a - x.a; });
+  var alto = filas.length * 34 + 6, ancho = 360, xIni = 86, xFin = 300;
+  var s = '<svg viewBox="0 0 ' + ancho + ' ' + alto + '" role="img" aria-label="Venta por local">';
+  filas.forEach(function (f, i) {
+    var y = i * 34 + 6;
+    var la = (xFin - xIni) * (f.a / tope), lb = (xFin - xIni) * (f.b / tope);
+    s += '<text x="0" y="' + (y + 11) + '" font-size="11" font-weight="700" fill="var(--ink)">' +
+         esc(f.n) + '</text>';
+    s += '<rect x="' + xIni + '" y="' + y + '" width="' + Math.max(lb, 1) + '" height="7" rx="3" fill="var(--line-fuerte)"/>';
+    s += '<rect x="' + xIni + '" y="' + (y + 10) + '" width="' + Math.max(la, 1) + '" height="11" rx="4" fill="var(--accent)"/>';
+    var cl = claseDif(f.a, f.b);
+    s += '<text x="' + ancho + '" y="' + (y + 15) + '" text-anchor="end" font-size="11" font-weight="800" ' +
+         'fill="' + (cl === 'sube' ? 'var(--ok)' : cl === 'baja' ? 'var(--bad)' : 'var(--muted)') + '">' +
+         dif(f.a, f.b) + '</text>';
+    s += '<text x="' + xIni + '" y="' + (y + 31) + '" font-size="10" fill="var(--muted)">' +
+         corta(f.a) + (f.b ? ' vs ' + corta(f.b) : ' · sin año anterior') + '</text>';
+  });
+  s += '</svg>';
+  return '<div class="graf"><h4>Por local</h4>' +
+    '<div class="ped-sub">Mismos días del año anterior.</div>' + s +
+    '<div class="leyenda"><span><i style="background:var(--accent)"></i>Este año</span>' +
+    '<span><i style="background:var(--line-fuerte)"></i>Año anterior</span></div></div>';
+}
+
+/** Barras por día, con la línea de lo proyectado. */
+function grafDias(m, corridos) {
+  if (!corridos.length) return '';
+  var cual = TAB_LOCAL, ancho = 360, alto = 150, base0 = 120;
+  var tope = 0, puntos = [];
+  for (var i = 0; i < m.dias.length; i++) {
+    var d = m.dias[i];
+    var a = diaTotal(d, cual, 'a'), b = (diaTotal(d, cual, 'b') || 0) * (1 + TAB.pct);
+    puntos.push({ d: d.d, a: a, p: b });
+    tope = Math.max(tope, a || 0, b);
+  }
+  if (!tope) return '';
+  var w = ancho / puntos.length, bw = Math.max(2, Math.min(14, w - 2));
+  var s = '<svg viewBox="0 0 ' + ancho + ' ' + alto + '" role="img" aria-label="Venta día a día">';
+  s += '<line x1="0" y1="' + base0 + '" x2="' + ancho + '" y2="' + base0 + '" stroke="var(--line)"/>';
+  var linea = '';
+  puntos.forEach(function (p, i) {
+    var x = i * w + (w - bw) / 2, cx = i * w + w / 2;
+    if (p.a !== null) {
+      var h = Math.max(1, (p.a / tope) * (base0 - 10));
+      s += '<rect x="' + x.toFixed(1) + '" y="' + (base0 - h).toFixed(1) + '" width="' + bw.toFixed(1) +
+           '" height="' + h.toFixed(1) + '" rx="2" fill="' +
+           (p.a >= p.p ? 'var(--ok)' : 'var(--accent)') + '"><title>' + p.d + ': ' + guita(p.a) +
+           '</title></rect>';
+    }
+    var yp = base0 - (p.p / tope) * (base0 - 10);
+    linea += (linea ? ' L' : 'M') + cx.toFixed(1) + ',' + yp.toFixed(1);
+  });
+  s += '<path d="' + linea + '" fill="none" stroke="var(--tenue)" stroke-width="1.5" ' +
+       'stroke-dasharray="4 3"/>';
+  puntos.forEach(function (p, i) {
+    if (p.d % 5 !== 0 && p.d !== 1) return;
+    s += '<text x="' + (i * w + w / 2).toFixed(1) + '" y="' + (base0 + 14) +
+         '" text-anchor="middle" font-size="10" fill="var(--muted)">' + p.d + '</text>';
+  });
+  s += '</svg>';
+  var cual2 = cual < 0 ? 'Todos los locales' : TAB.locales[cual];
+  return '<div class="graf"><h4>Día a día · ' + esc(cual2) + '</h4>' +
+    '<div class="ped-sub">En verde los días que superaron lo proyectado.</div>' + s +
+    '<div class="leyenda"><span><i style="background:var(--ok)"></i>Sobre lo proyectado</span>' +
+    '<span><i style="background:var(--accent)"></i>Abajo</span>' +
+    '<span><i style="background:var(--tenue)"></i>Proyectado</span></div></div>';
+}
+
+function tablaDias(m, corridos) {
+  if (!corridos.length) return '';
+  var cual = TAB_LOCAL;
+  var f = corridos.slice().reverse().map(function (d) {
+    var a = diaTotal(d, cual, 'a'), b = diaTotal(d, cual, 'b') || 0;
+    return '<tr><td>' + d.d + '</td><td class="num">' + guita(a) + '</td>' +
+      '<td class="num" style="color:var(--muted)">' + guita(b) + '</td>' +
+      '<td class="num ' + claseDif(a, b) + '">' + dif(a, b) + '</td></tr>';
+  }).join('');
+  return '<div class="graf"><h4>Día por día</h4><table class="tdias">' +
+    '<tr><th>Día</th><th>Venta</th><th>Año ant.</th><th>Dif.</th></tr>' + f + '</table></div>';
+}
+
 var ETIQUETA_ESTADO = { ok: ['b-listo', 'Llegó hoy'], esperando: ['b-pendiente', 'Pendiente'],
                         falta: ['b-error', 'No llegó'] };
 
