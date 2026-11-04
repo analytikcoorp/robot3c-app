@@ -150,6 +150,122 @@
   textarea { min-height: 76px; resize: vertical; }
   .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   /* ---- tablero de ventas ---- */
+
+  /* ---- réplica exacta de la primera hoja del "Resumen de ventas mensual" ----
+     Es el mismo CSS del informe, acotado a .repl para que no toque el resto de la app. */
+  .repl{ --r-page:#eef3f9; --r-surface:#ffffff; --r-surface-2:#e4edf6; --r-text:#182430;
+    --r-text-2:#51667a; --r-muted:#8ea0b3; --r-border:rgba(24,36,48,.10);
+    --r-border-strong:rgba(24,36,48,.18); --r-s1:#5b93c9; --r-s2:#33587e; --r-s3:#8fc6dc;
+    --r-good:#0a7d0a; --r-good-soft:#e3f4e0; --r-crit:#c23a3a; --r-crit-soft:#fbe4e1;
+    --r-new:#5b7699; --r-new-soft:#dde7f0; --r-hero:#1f3d5c; --r-hero-fg:#f3f8fd;
+    display:flex; flex-direction:column; gap:22px; color:var(--r-text); }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .repl{
+    --r-page:#0f1620; --r-surface:#1b2530; --r-surface-2:#212d3a; --r-text:#eef3f9;
+    --r-text-2:#b7c6d6; --r-muted:#8296ab; --r-border:rgba(238,243,249,.10);
+    --r-border-strong:rgba(238,243,249,.18); --r-s1:#7db8ea; --r-s2:#5085b3; --r-s3:#a8dced;
+    --r-good:#3fc23f; --r-good-soft:#173a17; --r-crit:#e66767; --r-crit-soft:#3f2222;
+    --r-new:#8fb2d6; --r-new-soft:#22384d; --r-hero:#14263b; } }
+  .repl .num{ font-variant-numeric: tabular-nums; }
+  .repl .masthead{ display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between;
+    gap:16px; padding-bottom:18px; border-bottom:2px solid var(--r-text); }
+  .repl .masthead .eyebrow{ font-size:12.5px; font-weight:700; letter-spacing:.11em;
+    text-transform:uppercase; color:var(--r-s1); margin:0 0 8px; }
+  .repl .masthead h1{ font-size:clamp(22px,5.5vw,40px); font-weight:800; letter-spacing:-.01em;
+    margin:0; line-height:1.05; }
+  .repl .masthead .sub{ margin:8px 0 0; color:var(--r-text-2); font-size:14px; max-width:56ch;
+    text-transform:none; letter-spacing:normal; font-weight:400; }
+  .repl .masthead .meta{ display:flex; flex-direction:column; gap:6px; align-items:flex-start; }
+  .repl .r-badge{ display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600;
+    padding:5px 11px; border-radius:100px; background:var(--r-surface-2);
+    border:1px solid var(--r-border-strong); color:var(--r-text-2); }
+  .repl .r-badge .dot{ width:6px; height:6px; border-radius:50%; background:var(--r-s1); }
+  .repl .meta .range{ font-size:13px; color:var(--r-muted); }
+  .repl .kpi-hero{ background:var(--r-hero); color:var(--r-hero-fg); border-radius:14px;
+    padding:20px 22px; display:flex; flex-wrap:wrap; align-items:center;
+    justify-content:space-between; gap:18px; }
+  .repl .kpi-hero .label{ font-size:13px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:#a9c4e0; margin:0 0 8px; }
+  .repl .kpi-hero .value{ font-size:clamp(30px,8vw,58px); font-weight:800; letter-spacing:-.015em;
+    line-height:1; }
+  .repl .kpi-hero .delta{ font-size:15px; font-weight:700; margin-top:10px; }
+  .repl .kpi-hero .delta.up{ color:#8fe08f; } .repl .kpi-hero .delta.down{ color:#f0a0a0; }
+  .repl .kpi-hero .delta .prev{ color:#a9c4e0; font-weight:500; }
+  .repl .kpi-hero .split{ display:flex; gap:28px; }
+  .repl .kpi-hero .plabel{ font-size:11px; font-weight:600; letter-spacing:.05em;
+    text-transform:uppercase; color:#a9c4e0; margin-bottom:4px; }
+  .repl .kpi-hero .pvalue{ font-size:18px; font-weight:700; }
+  .repl .r-kpis{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .repl .r-kpi{ background:var(--r-surface); border:1px solid var(--r-border); border-radius:10px;
+    padding:14px 16px; display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .repl .r-kpi .label{ font-size:11.5px; font-weight:600; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--r-muted); }
+  .repl .r-kpi .value{ font-size:21px; font-weight:700; letter-spacing:-.01em; }
+  .repl .r-kpi .delta{ font-size:12.5px; font-weight:600; }
+  .repl .r-kpi .delta.up{ color:var(--r-good); } .repl .r-kpi .delta.down{ color:var(--r-crit); }
+  .repl .r-kpi .delta .prev{ color:var(--r-muted); font-weight:500; }
+  .repl section{ background:var(--r-surface); border:1px solid var(--r-border); border-radius:12px;
+    padding:18px 18px 20px; }
+  .repl .section-head{ display:flex; flex-wrap:wrap; align-items:baseline;
+    justify-content:space-between; gap:10px; margin-bottom:16px; }
+  .repl .section-head h2{ font-size:16px; font-weight:700; margin:0; }
+  .repl .section-head .note{ font-size:12.5px; color:var(--r-muted); }
+  .repl .r-legend{ display:flex; gap:16px; font-size:12.5px; color:var(--r-text-2); }
+  .repl .r-legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .repl .r-legend i{ width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .repl .branch-row{ display:grid; grid-template-columns:1fr; row-gap:6px; padding:9px 0; }
+  .repl .branch-row + .branch-row{ border-top:1px solid var(--r-border); }
+  .repl .branch-row .name{ font-size:13.5px; font-weight:600; }
+  .repl .bars{ display:flex; flex-direction:column; gap:3px; }
+  .repl .bar-track{ height:7px; background:var(--r-surface-2); border-radius:4px; }
+  .repl .bar-fill{ height:100%; border-radius:4px; max-width:100%; }
+  .repl .bar-fill.s1{ background:var(--r-s1); } .repl .bar-fill.s2{ background:var(--r-s2); }
+  .repl .amounts{ display:flex; gap:14px; }
+  .repl .amounts .a{ font-size:15px; font-weight:700; color:var(--r-s1); white-space:nowrap; }
+  .repl .amounts .b{ font-size:13.5px; font-weight:600; color:var(--r-s2); white-space:nowrap; }
+  .repl .r-pill{ justify-self:start; font-size:13px; font-weight:700; padding:4px 10px;
+    border-radius:100px; min-width:78px; text-align:center; }
+  .repl .r-pill.up{ color:var(--r-good); background:var(--r-good-soft); }
+  .repl .r-pill.down{ color:var(--r-crit); background:var(--r-crit-soft); }
+  .repl .r-pill.new{ color:var(--r-new); background:var(--r-new-soft); font-size:12px; }
+  .repl .totals-row{ display:grid; grid-template-columns:1fr; row-gap:6px; padding-top:14px;
+    margin-top:6px; border-top:2px solid var(--r-text); }
+  .repl .totals-row .name{ font-weight:700; font-size:14px; }
+  .repl .totals-row .figs{ display:flex; gap:18px; font-size:15px; }
+  .repl .totals-row .figs .s1{ color:var(--r-s1); } .repl .totals-row .figs .s2{ color:var(--r-s2); }
+  .repl .tabla-ancha{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .repl .tabla-ancha table.plain{ min-width:330px; }
+  .repl table.plain{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .repl table.plain th{ text-align:right; font-size:10.5px; font-weight:600; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--r-muted); padding:0 0 8px;
+    border-bottom:1px solid var(--r-border-strong); }
+  .repl table.plain th:first-child, .repl table.plain td:first-child{ text-align:left; }
+  .repl table.plain td{ padding:8px 0 8px 7px; border-bottom:1px solid var(--r-border);
+    text-align:right; }
+  .repl table.plain td.name{ font-weight:600; padding-left:0; }
+  .repl table.plain td.up{ color:var(--r-good); font-weight:600; }
+  .repl table.plain td.down{ color:var(--r-crit); font-weight:600; }
+  .repl table.plain td.new{ color:var(--r-new); font-weight:600; font-size:11.5px; }
+  .repl table.plain tr.total td{ border-top:2px solid var(--r-text); border-bottom:none;
+    padding-top:11px; font-weight:700; }
+  .repl table.plain tr.extra td{ color:var(--r-text-2); font-size:12px; }
+  .repl table.plain tr.extra td.diff-neg{ color:var(--r-crit); font-weight:700; }
+  .repl table.plain tr.extra td.diff-pos{ color:var(--r-good); font-weight:700; }
+  .repl .mix-bar{ display:flex; height:26px; border-radius:7px; overflow:hidden;
+    border:1px solid var(--r-border-strong); }
+  .repl .mix-legend{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .repl .mix-legend .row{ display:flex; align-items:center; gap:10px; font-size:13px; }
+  .repl .mix-legend i{ width:11px; height:11px; border-radius:3px; flex:none; }
+  .repl .mix-legend .name{ flex:1; color:var(--r-text-2); }
+  .repl .mix-legend .pct{ color:var(--r-muted); font-size:12px; width:42px; text-align:right; }
+  .repl .cobros-sub + .cobros-sub{ margin-top:22px; }
+  .repl .cobros-sub-title{ display:block; font-size:12px; font-weight:700; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--r-muted); margin-bottom:10px; }
+  .repl .cobros-total-row{ display:flex; align-items:center; justify-content:space-between;
+    gap:12px; padding-top:14px; margin-top:20px; border-top:2px solid var(--r-text); }
+  .repl .cobros-total-row .name{ font-weight:700; font-size:14px; }
+  .repl .cobros-total-row b{ font-size:17px; font-weight:700; color:var(--r-s2); white-space:nowrap; }
+  .repl .pie{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px;
+    font-size:11.5px; color:var(--r-muted); }
   .cual-tab { display: flex; gap: 6px; margin: 0 0 12px; }
   .cual-tab button { flex: 1; border: 1px solid var(--line-fuerte); background: var(--card);
     color: var(--muted); border-radius: 10px; padding: 9px 6px; font-size: 13.5px; font-weight: 700;
@@ -329,7 +445,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-04 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-04 · 2';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
@@ -757,132 +873,187 @@ function cargarPanel() {
   });
 }
 
-/** La primera hoja del informe diario: lo mismo que el PDF, pero vivo. */
+/** Réplica de la primera hoja del "Resumen de ventas mensual", con el mismo armado
+ *  y los mismos textos que el PDF que genera el informe diario. */
+var MESES_NOMBRE = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+                    'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function pesos(n) {                         // "$ 8.190.890", como en el informe
+  var s = Math.round(Math.abs(n)).toString(), o = '';
+  for (var i = 0; i < s.length; i++) {
+    o += s.charAt(i);
+    var f = s.length - 1 - i;
+    if (f > 0 && f % 3 === 0) o += '.';
+  }
+  return (n < 0 ? '-$ ' : '$ ') + o;
+}
+function pc(a, b) { return ((a / b - 1) * 100).toFixed(1).replace('.', ','); }
+function flecha(a, b) { return (a >= b ? '▲ +' : '▼ ') + pc(a, b) + '%'; }
+function enLetras(f) {                      // "02/11/2026" -> "2 de noviembre de 2026"
+  var m = String(f || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  return m ? Number(m[1]) + ' de ' + MESES_NOMBRE[Number(m[2]) - 1] + ' de ' + m[3] : (f || '');
+}
+function sinAnio(r) { return String(r || '').replace(/\/\d{4} al /, ' al '); }
+function anioDe(r) { var m = String(r || '').match(/(\d{4})\s*$/); return m ? m[1] : ''; }
+
 function pintarPanel(guardado) {
   var p = PANEL;
   if (!p) { $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Sin datos.</div>'; return; }
-  var dg = claseDif(p.general.a, p.general.b);
+  var dia = (p.al || '').split(' ')[0];
+  var h = '<div class="repl">';
 
-  var hero = '<div class="hero"><div class="r">Total general acumulado</div>' +
-    '<div class="v">' + guita(p.general.a) + '</div>' +
-    '<div class="d ' + dg + '">' + dif(p.general.a, p.general.b) +
-      ' <span>vs ' + guita(p.general.b) + '</span></div>' +
-    '<div class="partes">' +
-      '<div><div class="pr">Minorista</div><div class="pv">' + corta(p.minorista.a) + '</div></div>' +
-      '<div><div class="pr">Mayorista</div><div class="pv">' + corta(p.mayorista.a) + '</div></div>' +
-    '</div></div>';
+  // ---- encabezado
+  h += '<div class="masthead"><div>' +
+    '<p class="eyebrow">Informe diario de ventas</p>' +
+    '<h1>Ventas del ' + esc(enLetras(p.fecha)) + '</h1>' +
+    '<p class="sub">Acumulado del mes ' + esc(sinAnio(p.periodo)) +
+      ', comparado contra el mismo período de ' + esc(anioDe(p.periodoAnt)) +
+      '. Informe procesado el ' + esc(dia) + ' con los datos de ventas y cobros del ' +
+      esc(p.fecha) + '.</p></div>' +
+    '<div class="meta"><span class="r-badge"><span class="dot"></span>Snapshot fijo · hoja ' +
+      esc(String(p.fecha || '').replace(/\//g, '-')) + '</span>' +
+    '<span class="range">vs. ' + esc(sinAnio(p.periodoAnt)) + '</span></div></div>';
 
+  // ---- total general
+  h += '<div class="kpi-hero"><div>' +
+    '<p class="label">Total general acumulado</p>' +
+    '<div class="value num">' + pesos(p.general.a) + '</div>' +
+    '<div class="delta ' + (p.general.a >= p.general.b ? 'up' : 'down') + '">' +
+      flecha(p.general.a, p.general.b) + ' <span class="prev">vs ' + pesos(p.general.b) +
+      '</span></div></div>' +
+    '<div class="split">' +
+      '<div class="piece"><div class="plabel">Minorista</div><div class="pvalue num">' +
+        pesos(p.minorista.a) + '</div></div>' +
+      '<div class="piece"><div class="plabel">Mayorista</div><div class="pvalue num">' +
+        pesos(p.mayorista.a) + '</div></div></div></div>';
+
+  // ---- los cuatro indicadores
   var ayerMay = (p.ayer.general || 0) - (p.ayer.minorista || 0);
-  var kpis = '<div class="kpis" style="margin-top:10px">' +
-    '<div class="kpi"><div class="r">Minorista mes</div><div class="v">' + corta(p.minorista.a) + '</div>' +
-      '<div class="d ' + claseDif(p.minorista.a, p.minorista.b) + '">' +
-      dif(p.minorista.a, p.minorista.b) + '</div></div>' +
-    '<div class="kpi"><div class="r">Mayorista mes</div><div class="v">' + corta(p.mayorista.a) + '</div>' +
-      '<div class="d ' + claseDif(p.mayorista.a, p.mayorista.b) + '">' +
-      dif(p.mayorista.a, p.mayorista.b) + '</div></div>' +
-    '<div class="kpi"><div class="r">Ayer minorista</div><div class="v">' +
-      corta(p.ayer.minorista || 0) + '</div>' +
-      '<div class="d" style="color:var(--muted)">mayorista ' + corta(ayerMay) + '</div></div>' +
+  function kpi(lab, val, delta, clase) {
+    return '<div class="r-kpi"><span class="label">' + lab + '</span>' +
+      '<span class="value num">' + val + '</span>' +
+      '<span class="delta ' + (clase || '') + '">' + delta + '</span></div>';
+  }
+  h += '<div class="r-kpis">' +
+    kpi('Total minorista acumulado', pesos(p.minorista.a),
+        flecha(p.minorista.a, p.minorista.b) + ' <span class="prev">vs ' + pesos(p.minorista.b) + '</span>',
+        p.minorista.a >= p.minorista.b ? 'up' : 'down') +
+    kpi('Total mayorista acumulado', pesos(p.mayorista.a),
+        p.mayorista.b ? flecha(p.mayorista.a, p.mayorista.b) + ' <span class="prev">vs ' +
+          pesos(p.mayorista.b) + '</span>' : 'Sin dato ' + anioDe(p.periodoAnt),
+        p.mayorista.a >= p.mayorista.b ? 'up' : 'down') +
+    kpi('Ventas de ayer (minorista)', pesos(p.ayer.minorista || 0), esc(p.fecha), 'up') +
+    kpi('Ventas de ayer (mayorista)', pesos(ayerMay), esc(p.fecha), 'up') +
     '</div>';
 
-  $('vTablero').innerHTML = tabsVista() +
-    '<div class="tit-tablero">Ventas del ' + esc(p.fecha || '') + '</div>' +
-    '<div class="ped-sub" style="margin:-6px 0 10px">Acumulado ' + esc(p.periodo) +
-      ' contra ' + esc(p.periodoAnt) + ' · Excel al ' + esc(p.al || '') +
-      (guardado ? ' · buscando novedades…' : '') + '</div>' +
-    hero + kpis + sucursalesPanel(p) + canalesPanel(p) + cobrosPanel(p) + ayerPanel(p);
-}
-
-function sucursalesPanel(p) {
+  // ---- ventas por sucursal
+  var suc = p.sucursales.slice().sort(function (x, y) { return y.a - x.a; });
   var tope = 0;
-  p.sucursales.forEach(function (s) { tope = Math.max(tope, s.a, s.b); });
-  if (!tope) return '';
-  var filas = p.sucursales.slice().sort(function (x, y) { return y.a - x.a; });
-  var ALTO = 30, ancho = 360;
-  var s = '<svg viewBox="0 0 ' + ancho + ' ' + (filas.length * ALTO) + '" role="img" aria-label="Ventas por sucursal">';
-  filas.forEach(function (f, i) {
-    var y = i * ALTO, cl = claseDif(f.a, f.b);
-    s += '<text x="0" y="' + (y + 10) + '" font-size="11.5" font-weight="700" fill="var(--ink)">' +
-         esc(f.n) + '</text>';
-    s += '<text x="212" y="' + (y + 10) + '" text-anchor="end" font-size="11.5" font-weight="700" ' +
-         'fill="var(--ink)">' + corta(f.a) + '</text>';
-    s += '<text x="292" y="' + (y + 10) + '" text-anchor="end" font-size="11" fill="var(--muted)">' +
-         (f.b ? corta(f.b) : '—') + '</text>';
-    s += '<text x="' + ancho + '" y="' + (y + 10) + '" text-anchor="end" font-size="11.5" ' +
-         'font-weight="800" fill="' + (cl === 'sube' ? 'var(--ok)' : cl === 'baja' ? 'var(--bad)' :
-         'var(--muted)') + '">' + dif(f.a, f.b) + '</text>';
-    s += '<rect x="0" y="' + (y + 15) + '" width="' + Math.max(ancho * (f.a / tope), 1) +
-         '" height="6" rx="3" fill="var(--accent)"/>';
-    s += '<rect x="0" y="' + (y + 23) + '" width="' + Math.max(ancho * (f.b / tope), 1) +
-         '" height="3" rx="1.5" fill="var(--line-fuerte)"/>';
-  });
-  s += '</svg>';
-  return '<div class="graf"><h4>Por sucursal · acumulado del mes</h4>' +
-    '<div class="ped-sub">Este año · año anterior · diferencia.</div>' + s +
-    '<div class="leyenda"><span><i style="background:var(--accent)"></i>Este año</span>' +
-    '<span><i style="background:var(--line-fuerte)"></i>Año anterior</span></div></div>';
-}
-
-function canalesPanel(p) {
-  if (!p.canales.length) return '';
-  var f = p.canales.map(function (c) {
-    return '<tr><td>' + esc(c.n) + '</td><td class="num">' + guita(c.a) + '</td>' +
-      '<td class="num" style="color:var(--muted)">' + guita(c.b) + '</td>' +
-      '<td class="num ' + claseDif(c.a, c.b) + '">' + dif(c.a, c.b) + '</td></tr>';
+  suc.forEach(function (s) { tope = Math.max(tope, s.a); });
+  var filas = suc.map(function (s) {
+    var pill = !s.b ? '<span class="r-pill new">Sucursal nueva</span>'
+      : '<span class="r-pill ' + (s.a >= s.b ? 'up' : 'down') + '">' +
+        (s.a >= s.b ? '+' : '') + pc(s.a, s.b) + '%</span>';
+    return '<div class="branch-row"><span class="name">' + esc(s.n) + '</span>' +
+      '<div class="amounts"><span class="a num">' + pesos(s.a) + '</span>' +
+      '<span class="b num">' + (s.b ? pesos(s.b) : '— (sin ' + anioDe(p.periodoAnt) + ')') +
+      '</span></div>' + pill +
+      '<div class="bars">' +
+        '<div class="bar-track"><div class="bar-fill s1" style="width:' +
+          (tope ? (100 * s.a / tope).toFixed(1) : 0) + '%"></div></div>' +
+        '<div class="bar-track"><div class="bar-fill s2" style="width:' +
+          (tope ? (100 * s.b / tope).toFixed(1) : 0) + '%"></div></div>' +
+      '</div></div>';
   }).join('');
-  f += '<tr style="font-weight:800"><td>Total mayorista</td><td class="num">' + guita(p.mayorista.a) +
-       '</td><td class="num">' + guita(p.mayorista.b) + '</td><td class="num ' +
-       claseDif(p.mayorista.a, p.mayorista.b) + '">' + dif(p.mayorista.a, p.mayorista.b) + '</td></tr>';
-  f += '<tr><td style="color:var(--muted)">Cobrado mayorista</td><td class="num">' +
-       guita(p.mayorista.cobrado || 0) + '</td><td colspan="2" class="num ' +
-       ((p.mayorista.dif || 0) < 0 ? 'baja' : 'sube') + '">' +
-       guita(p.mayorista.dif || 0) + ' vs facturado</td></tr>';
-  return '<div class="graf"><h4>Mayorista por canal</h4>' +
-    '<table class="tdias"><tr><th>Canal</th><th>Este año</th><th>Año ant.</th><th>Dif.</th></tr>' +
-    f + '</table></div>';
-}
+  var aAnio = anioDe(p.periodo), bAnio = anioDe(p.periodoAnt);
+  h += '<section><div class="section-head"><h2>Ventas por sucursal — acumulado del mes</h2>' +
+    '<div class="r-legend"><span><i style="background:var(--r-s1)"></i>' + esc(sinAnio(p.periodo)) +
+    '</span><span><i style="background:var(--r-s2)"></i>' + esc(sinAnio(p.periodoAnt)) +
+    '</span></div></div><div class="branch-rows">' + filas + '</div>' +
+    '<div class="totals-row"><span class="name">Totales</span><div class="figs">' +
+      '<span class="s1">' + aAnio + ' <b class="num">' + pesos(p.minorista.a) + '</b></span>' +
+      '<span class="s2">' + bAnio + ' <b class="num">' + pesos(p.minorista.b) + '</b></span>' +
+    '</div><span class="r-pill ' + (p.minorista.a >= p.minorista.b ? 'up' : 'down') + '">' +
+    (p.minorista.a >= p.minorista.b ? '+' : '') + pc(p.minorista.a, p.minorista.b) +
+    '%</span></div></section>';
 
-function cobrosPanel(p) {
+  // ---- mayorista y canales
+  var canales = p.canales.map(function (c) {
+    var v = !c.b ? '<td class="new">Sin dato ' + bAnio + '</td>'
+      : '<td class="' + (c.a >= c.b ? 'up' : 'down') + '">' + (c.a >= c.b ? '+' : '') +
+        pc(c.a, c.b) + '%</td>';
+    return '<tr><td class="name">' + esc(c.n) + '</td><td class="num">' + pesos(c.a) +
+      '</td><td class="num">' + pesos(c.b) + '</td>' + v + '</tr>';
+  }).join('');
+  h += '<section><div class="section-head"><h2>Mayorista y canales — acumulado del mes</h2>' +
+    '<span class="note">vs. mismo período ' + bAnio + '</span></div>' +
+    '<table class="plain"><thead><tr><th>Canal</th><th>' + aAnio + '</th><th>' + bAnio +
+    '</th><th>Var.</th></tr></thead><tbody>' + canales +
+    '<tr class="total"><td class="name">Total mayorista</td><td class="num">' + pesos(p.mayorista.a) +
+      '</td><td class="num">' + pesos(p.mayorista.b) + '</td><td class="num">' +
+      (p.mayorista.b ? (p.mayorista.a >= p.mayorista.b ? '+' : '') + pc(p.mayorista.a, p.mayorista.b) + '%' : '—') +
+      '</td></tr>' +
+    '<tr class="extra"><td class="name">Total cobrado mayorista</td><td class="num">' +
+      pesos(p.mayorista.cobrado || 0) + '</td><td></td><td></td></tr>' +
+    '<tr class="extra"><td class="name">Diferencia (cobrado − facturado)</td>' +
+      '<td class="num ' + ((p.mayorista.dif || 0) < 0 ? 'diff-neg' : 'diff-pos') + '">' +
+      pesos(p.mayorista.dif || 0) + '</td><td></td><td></td></tr>' +
+    '</tbody></table></section>';
+
+  // ---- cobros de ayer
   var c = p.cobros || {};
-  if (!c.total) return '';
-  var COLORES = ['var(--accent)', 'var(--brand)', 'var(--accent-claro)', 'var(--tenue)', 'var(--warn)'];
-  function bloque(titulo, lista) {
+  var COL = ['var(--r-s1)', 'var(--r-s2)', 'var(--r-s3)', 'var(--r-new)'];
+  function mezcla(titulo, lista) {
     if (!lista || !lista.length) return '';
     var tot = lista.reduce(function (s, x) { return s + x.v; }, 0);
     if (!tot) return '';
-    var barra = '<div class="mezcla">' + lista.map(function (x, i) {
-      return '<div style="width:' + (100 * x.v / tot).toFixed(1) + '%;background:' +
-             COLORES[i % COLORES.length] + '"></div>';
-    }).join('') + '</div>';
-    var det = '<div class="mez-lista">' + lista.map(function (x, i) {
-      return '<div class="f"><i style="background:' + COLORES[i % COLORES.length] + '"></i>' +
-        '<span class="n">' + esc(x.n) + '</span><b>' + guita(x.v) + '</b>' +
-        '<span class="p">' + (100 * x.v / tot).toFixed(0) + '%</span></div>';
-    }).join('') + '</div>';
-    return '<div class="sub" style="margin-top:14px">' + titulo + '</div>' + barra + det;
+    return '<div class="cobros-sub"><span class="cobros-sub-title">' + titulo + '</span>' +
+      '<div class="mix-bar">' + lista.map(function (x, i) {
+        return '<div class="mix-seg" style="width:' + (100 * x.v / tot).toFixed(1) +
+               '%; background:' + COL[i % COL.length] + '"></div>';
+      }).join('') + '</div><div class="mix-legend">' + lista.map(function (x, i) {
+        return '<div class="row"><i style="background:' + COL[i % COL.length] + '"></i>' +
+          '<span class="name">' + esc(x.n) + '</span><b class="num">' + pesos(x.v) + '</b>' +
+          '<span class="pct">' + (100 * x.v / tot).toFixed(1) + '%</span></div>';
+      }).join('') + '</div></div>';
   }
-  return '<div class="graf"><h4>Cobros del día</h4>' +
-    bloque('Minorista', c.minorista) + bloque('Mayorista', c.mayorista) +
-    '<div class="total-linea"><span>Total cobrado</span><b>' + guita(c.total) + '</b></div></div>';
-}
+  if (c.total) {
+    h += '<section><div class="section-head"><h2>Cobros de ayer</h2>' +
+      '<span class="note">' + esc(p.fecha) + '</span></div>' +
+      mezcla('Minorista', c.minorista) + mezcla('Mayorista', c.mayorista) +
+      '<div class="cobros-total-row"><span class="name">Total cobrado del día ' +
+      '(Minorista + Mayorista)</span><b class="num">' + pesos(c.total) + '</b></div></section>';
+  }
 
-function ayerPanel(p) {
-  if (!p.ayer.sucursales || !p.ayer.sucursales.length) return '';
-  var f = p.ayer.sucursales.slice().sort(function (x, y) { return y.v - x.v; }).map(function (s) {
-    var caja = s.caja === undefined || s.caja === 0 ? '<span style="color:var(--tenue)">—</span>'
-      : '<span class="' + (s.caja > 0 ? 'sube' : 'baja') + '">' +
-        (s.caja > 0 ? 'Sobra ' : 'Falta ') + guita(s.caja) + '</span>';
-    return '<tr><td>' + esc(s.n) + '</td><td class="num">' + guita(s.v) + '</td>' +
-      '<td class="num" style="color:var(--muted)">' + s.art + '</td>' +
-      '<td class="num" style="color:var(--muted)">' + guita(s.ticket) + '</td>' +
-      '<td class="num">' + caja + '</td></tr>';
-  }).join('');
-  f += '<tr style="font-weight:800"><td>Total minorista</td><td class="num">' +
-       guita(p.ayer.minorista || 0) + '</td><td colspan="3"></td></tr>';
-  return '<div class="graf"><h4>Ventas de ayer por sucursal</h4>' +
-    '<div class="ped-sub">Artículos acumulados del mes y ticket promedio del día.</div>' +
-    '<table class="tdias"><tr><th>Sucursal</th><th>Venta</th><th>Art.</th><th>Ticket</th>' +
-    '<th>Caja</th></tr>' + f + '</table></div>';
+  // ---- ventas de ayer por sucursal
+  if (p.ayer.sucursales && p.ayer.sucursales.length) {
+    var fa = p.ayer.sucursales.slice().sort(function (x, y) { return y.v - x.v; })
+      .map(function (s) {
+        var caja = !s.caja ? '<td class="num" style="color:var(--r-muted)">—</td>'
+          : '<td class="num ' + (s.caja > 0 ? 'up' : 'down') + '">' +
+            (s.caja > 0 ? 'Sobrante ' : 'Faltante ') + pesos(Math.abs(s.caja)) + '</td>';
+        return '<tr><td class="name">' + esc(s.n) + '</td>' +
+          '<td class="num">' + pesos(s.v) + '</td>' +
+          '<td class="num" style="color:var(--r-muted)">—</td>' +
+          '<td class="num">' + s.art + '</td>' +
+          '<td class="num">' + pesos(s.ticket) + '</td>' + caja + '</tr>';
+      }).join('');
+    h += '<section><div class="section-head"><h2>Ventas de ayer por sucursal</h2>' +
+      '<span class="note">' + esc(p.fecha) + ' · minorista · importes en $</span></div>' +
+      '<div class="tabla-ancha"><table class="plain"><thead><tr><th>Sucursal</th><th>Venta ' + esc(p.fecha) +
+      '</th><th>Art. vend. hoy</th><th>Art. acum. mes</th><th>Ticket prom.</th><th>Caja</th>' +
+      '</tr></thead><tbody>' + fa +
+      '<tr class="total"><td class="name">Total minorista</td><td class="num">' +
+      pesos(p.ayer.minorista || 0) + '</td><td></td><td></td><td></td><td></td></tr>' +
+      '</tbody></table></div></section>';
+  }
+
+  h += '<div class="pie"><span>Fuente: exports del sistema de gestión, procesados y congelados el ' +
+    esc(dia) + ' · hoja "' + esc(String(p.fecha || '').replace(/\//g, '-')) +
+    '" del Informe de Ventas.</span></div></div>';
+
+  $('vTablero').innerHTML = tabsVista() +
+    (guardado ? '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste · ' +
+      'buscando novedades…</div>' : '') + h;
 }
 
 function cargarTablero() {
