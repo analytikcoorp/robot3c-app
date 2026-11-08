@@ -266,10 +266,19 @@
   .repl .cobros-total-row b{ font-size:17px; font-weight:700; color:var(--r-s2); white-space:nowrap; }
   .repl .pie{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px;
     font-size:11.5px; color:var(--r-muted); }
+  .rearmar { display: flex; justify-content: flex-end; margin: -4px 0 10px; }
+  .rearmar button { border: 1px solid var(--line-fuerte); background: var(--card);
+    color: var(--accent); border-radius: 999px; padding: 7px 14px; font-size: 12.5px;
+    font-weight: 700; cursor: pointer; }
+  .rearmar button[disabled] { opacity: .6; cursor: default; }
+  .atrasado { background: var(--warn-bg); color: var(--warn); border-radius: 10px;
+    padding: 9px 12px; font-size: 12.5px; font-weight: 600; margin: 0 0 10px; }
   .cual-tab { display: flex; gap: 6px; margin: 0 0 12px; }
   .cual-tab button { flex: 1; border: 1px solid var(--line-fuerte); background: var(--card);
     color: var(--muted); border-radius: 10px; padding: 9px 6px; font-size: 13.5px; font-weight: 700;
     cursor: pointer; }
+  .tab-mes { display: block; width: 100%; height: calc(100dvh - 190px); min-height: 420px; border: 0;
+             border-radius: 12px; background: #f4f6f9; }
   .cual-tab button.act { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
   .hero { background: var(--brand); color: var(--brand-ink); border-radius: 14px; padding: 16px 18px; }
   .hero .r { font-size: 10.5px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
@@ -445,7 +454,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-04 · 2';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-04 · 4';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
@@ -842,10 +851,47 @@ function claseDif(a, b) { return !b ? '' : (a >= b ? 'sube' : 'baja'); }
 
 function verVista(v) { TAB_VISTA = v; cargarTablero(); window.scrollTo(0, 0); }
 
+function guardarLocal(prefijo, obj) {
+  try {
+    localStorage.setItem(prefijo + ((DATA.usuario && DATA.usuario.email) || ''), JSON.stringify(obj));
+  } catch (e) { /* no es grave */ }
+}
+
+/** Rehace el tablero en el momento, sin esperar a que lo haga solo. Sirve cuando el
+ *  informe llegó tarde (04/11/2026: el Excel apareció recién a las 06:38). */
+function botonRearmar() {
+  if (!(DATA.usuario && DATA.usuario.rol === 'admin')) return '';
+  return '<div class="rearmar"><button id="bRearmar" onclick="rearmarAhora()">' +
+         '↻ Buscar el informe nuevo</button></div>';
+}
+
+function rearmarAhora() {
+  var b = $('bRearmar');
+  if (!b) return;
+  b.disabled = true;
+  b.textContent = 'Buscando… puede tardar';
+  var cual = TAB_VISTA === 'dia' ? 'dia' : 'proy';
+  api('rearmar', { cual: cual }).then(function (d) {
+    if (cual === 'dia' && d.panel) {
+      PANEL = d.panel; guardarLocal('panel_', PANEL); pintarPanel(); toast('Tablero al día');
+    } else if (cual === 'proy' && d.tablero) {
+      TAB = d.tablero; TAB_MES = -1; guardarLocal('tablero_', TAB); pintarTablero();
+      toast('Tablero al día');
+    } else {
+      b.disabled = false; b.textContent = '↻ Buscar el informe nuevo';
+      toast('No encontré un informe nuevo');
+    }
+  }).catch(function (e) {
+    b.disabled = false; b.textContent = '↻ Buscar el informe nuevo';
+    toast(e.message || e);
+  });
+}
+
 function tabsVista() {
   return '<div class="cual-tab">' +
     '<button class="' + (TAB_VISTA === 'dia' ? 'act' : '') + '" onclick="verVista(\'dia\')">Del día</button>' +
     '<button class="' + (TAB_VISTA === 'proy' ? 'act' : '') + '" onclick="verVista(\'proy\')">Proyección</button>' +
+    '<button class="' + (TAB_VISTA === 'mes' ? 'act' : '') + '" onclick="verVista(\'mes\')">Por local</button>' +
     '</div>';
 }
 
@@ -865,8 +911,7 @@ function cargarPanel() {
       return;
     }
     PANEL = d.panel;
-    try { localStorage.setItem('panel_' + ((DATA.usuario && DATA.usuario.email) || ''),
-                               JSON.stringify(PANEL)); } catch (e) { /* no es grave */ }
+    guardarLocal('panel_', PANEL);
     if (TAB_VISTA === 'dia') pintarPanel();
   }).catch(function (e) {
     if (!PANEL) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">' + esc(e.message || e) + '</div>';
@@ -894,6 +939,22 @@ function enLetras(f) {                      // "02/11/2026" -> "2 de noviembre d
 }
 function sinAnio(r) { return String(r || '').replace(/\/\d{4} al /, ' al '); }
 function anioDe(r) { var m = String(r || '').match(/(\d{4})\s*$/); return m ? m[1] : ''; }
+
+/** Si el informe que estamos mostrando no es el de ayer, decirlo: es la diferencia entre
+ *  mirar un número viejo sin darse cuenta y saber que todavía no llegó. */
+function avisoAtraso(fechaTxt) {
+  var m = String(fechaTxt || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!m) return '';
+  var dato = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  var ayer = new Date();
+  ayer.setHours(0, 0, 0, 0);
+  ayer.setDate(ayer.getDate() - 1);
+  var dias = Math.round((ayer - dato) / 86400000);
+  if (dias <= 0) return '';
+  return '<div class="atrasado">Este informe es del ' + esc(fechaTxt) + '. Todavía no llegó el de ' +
+    (dias === 1 ? 'ayer' : 'los últimos ' + dias + ' días') +
+    ': el proceso de la notebook puede estar demorado.</div>';
+}
 
 function pintarPanel(guardado) {
   var p = PANEL;
@@ -1051,13 +1112,14 @@ function pintarPanel(guardado) {
     esc(dia) + ' · hoja "' + esc(String(p.fecha || '').replace(/\//g, '-')) +
     '" del Informe de Ventas.</span></div></div>';
 
-  $('vTablero').innerHTML = tabsVista() +
+  $('vTablero').innerHTML = tabsVista() + avisoAtraso(p.fecha) + botonRearmar() +
     (guardado ? '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste · ' +
       'buscando novedades…</div>' : '') + h;
 }
 
 function cargarTablero() {
   if (TAB_VISTA === 'dia') return cargarPanel();
+  if (TAB_VISTA === 'mes') return cargarMes();
   if (!TAB) {
     try {
       var g = localStorage.getItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''));
@@ -1073,12 +1135,49 @@ function cargarTablero() {
       return;
     }
     TAB = d.tablero; TAB_MES = -1;
-    try { localStorage.setItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''),
-                               JSON.stringify(TAB)); } catch (e) { /* no es grave */ }
+    guardarLocal('tablero_', TAB);
     pintarTablero();
   }).catch(function (e) {
     if (!TAB) $('vTablero').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>';
   });
+}
+
+// ---------------------------------------------------------------- tablero del mes por local
+// Réplica de las 9 hojas por sucursal del "Resumen de ventas mensual" (todos los días del mes,
+// Venta año base · Proyectada · Venta actual · Observación, TOTAL MES y resumen al corte).
+// La arma la notebook con el mismo script del informe y la publica todas las noches; acá se
+// muestra tal cual, en un iframe aislado (sandbox sin permisos: no ve la sesión ni la app).
+var MES_HTML = null;
+
+function cargarMes() {
+  if (!MES_HTML) {
+    try {
+      var g = localStorage.getItem('tabmes_' + ((DATA.usuario && DATA.usuario.email) || ''));
+      if (g) MES_HTML = JSON.parse(g);
+    } catch (e) { /* sin guardado */ }
+  }
+  if (MES_HTML) pintarMes();
+  else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero del mes…</div>';
+  api('tablero_mes').then(function (d) {
+    if (TAB_VISTA !== 'mes') return;
+    if (!d.html) {
+      if (!MES_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el ' +
+        'tablero del mes. Lo publica la notebook cuando arma el informe diario, después de las 00:00.</div>';
+      return;
+    }
+    var nuevo = !MES_HTML || MES_HTML.html !== d.html;
+    MES_HTML = { html: d.html, al: d.al || '' };
+    guardarLocal('tabmes_', MES_HTML);
+    if (nuevo) pintarMes();
+  }).catch(function (e) {
+    if (!MES_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">' + esc(e.message || e) + '</div>';
+  });
+}
+
+function pintarMes() {
+  $('vTablero').innerHTML = tabsVista() + avisoAtraso(MES_HTML.al) +
+    '<iframe id="fMes" class="tab-mes" sandbox="allow-scripts" title="Ventas por local del mes"></iframe>';
+  $('fMes').srcdoc = MES_HTML.html;          // por propiedad: sin armar HTML con el contenido
 }
 
 /** Suma de un día: todos los locales, o el elegido. Devuelve null si ese día no corrió. */
@@ -1154,7 +1253,7 @@ function pintarTablero(guardado) {
       ' (proyectado ' + corta(proyMes) + ').') +
     ' · Libro al ' + esc(TAB.al) + (guardado ? ' · buscando novedades…' : '') + '</div>';
 
-  $('vTablero').innerHTML = tabsVista() + titulo + chips + filtro + pie + mandoPct() +
+  $('vTablero').innerHTML = tabsVista() + botonRearmar() + titulo + chips + filtro + pie + mandoPct() +
     grafLocales(m) + kpis + tablaDias(m, corridos);
   // el mes elegido suele ser el último: centrarlo en la tira, sin tocar el scroll de la página
   var tira = $('vTablero').querySelector('.meses');
