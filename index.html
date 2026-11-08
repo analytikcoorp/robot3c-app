@@ -277,6 +277,12 @@
   .cual-tab button { flex: 1; border: 1px solid var(--line-fuerte); background: var(--card);
     color: var(--muted); border-radius: 10px; padding: 9px 6px; font-size: 13.5px; font-weight: 700;
     cursor: pointer; }
+  .proy-fijar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -4px 0 12px;
+                font-size: 12.5px; color: var(--muted); }
+  .proy-fijar span { flex-basis: 100%; }
+  .proy-fijar button { border: 0; background: var(--brand); color: var(--brand-ink); border-radius: 10px;
+                       padding: 8px 12px; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .proy-fijar button.volver { background: var(--card); color: var(--ink); border: 1px solid var(--line-fuerte); }
   .tab-mes { display: block; width: 100%; height: calc(100dvh - 190px); min-height: 420px; border: 0;
              border-radius: 12px; background: #f4f6f9; }
   .cual-tab button.act { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
@@ -875,7 +881,7 @@ function rearmarAhora() {
     if (cual === 'dia' && d.panel) {
       PANEL = d.panel; guardarLocal('panel_', PANEL); pintarPanel(); toast('Tablero al día');
     } else if (cual === 'proy' && d.tablero) {
-      TAB = d.tablero; TAB_MES = -1; guardarLocal('tablero_', TAB); pintarTablero();
+      TAB = d.tablero; TAB_MES = -1; TAB_VIG = TAB.pct; guardarLocal('tablero_', TAB); pintarTablero();
       toast('Tablero al día');
     } else {
       b.disabled = false; b.textContent = '↻ Buscar el informe nuevo';
@@ -1134,7 +1140,7 @@ function cargarTablero() {
         'En la planilla: Robot 3C › Rearmar el tablero de ventas.</div>';
       return;
     }
-    TAB = d.tablero; TAB_MES = -1;
+    TAB = d.tablero; TAB_MES = -1; TAB_VIG = TAB.pct; FIJAR_OK = false;
     guardarLocal('tablero_', TAB);
     pintarTablero();
   }).catch(function (e) {
@@ -1264,30 +1270,48 @@ function pintarTablero(guardado) {
   }
 }
 
-/** El % de incremento con el que se proyecta la venta. Lo cambian los administradores. */
+/** El % de incremento con el que se proyecta la venta.
+ *  El − / + es solo para mirar en pantalla ("¿y si fuera 15%?"): no cambia nada.
+ *  Para que valga en todos los informes, el administrador toca "Fijar": eso le pide al
+ *  robot que lo escriba en el libro (Parámetros!B3) y rearme el informe del día. */
+var TAB_VIG = null, FIJAR_OK = false;
+function pctTxt(f) { return (f * 100).toFixed(1).replace('.', ',').replace(',0', ''); }
 function mandoPct() {
-  var pct = (TAB.pct * 100).toFixed(1).replace('.', ',').replace(',0', '');
+  var pct = pctTxt(TAB.pct);
   var admin = DATA.usuario && DATA.usuario.rol === 'admin';
+  if (TAB_VIG === null) TAB_VIG = TAB.pct;
   if (!admin) return '<div class="proy">Proyección: <b>+' + pct + '%</b> sobre el año anterior</div>';
-  return '<div class="proy">Proyección sobre el año anterior:' +
+  var h = '<div class="proy">Proyección sobre el año anterior:' +
     '<button onclick="cambiarPct(-1)" aria-label="Bajar">−</button>' +
     '<b>+' + pct + '%</b>' +
     '<button onclick="cambiarPct(1)" aria-label="Subir">+</button></div>';
+  if (Math.abs(TAB.pct - TAB_VIG) > 1e-9) {
+    h += '<div class="proy-fijar"><span>Vigente en los informes: +' + pctTxt(TAB_VIG) + '%. ' +
+         'Lo de arriba es solo una prueba en pantalla.</span>' +
+         '<button onclick="fijarPct()">' + (FIJAR_OK ? 'Tocá de nuevo para confirmar' :
+         'Fijar +' + pct + '% en todos los informes') + '</button>' +
+         '<button class="volver" onclick="volverPct()">Volver a +' + pctTxt(TAB_VIG) + '%</button></div>';
+  }
+  return h;
 }
-var timerPct = null;
 function cambiarPct(d) {
   var n = Math.round(TAB.pct * 100) + d;
-  if (n < 0 || n > 200) return;
+  if (n < -100 || n > 500) return;
   TAB.pct = n / 100;
+  FIJAR_OK = false;
   pintarTablero();
-  clearTimeout(timerPct);
-  timerPct = setTimeout(function () {          // se guarda una sola vez, al dejar de tocar
-    api('pct_tablero', { pct: TAB.pct }).then(function () {
-      try { localStorage.setItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''),
-                                 JSON.stringify(TAB)); } catch (e) { /* no es grave */ }
-      toast('Proyección guardada');
-    }).catch(function (e) { toast(e.message || e); });
-  }, 900);
+}
+function volverPct() { TAB.pct = TAB_VIG; FIJAR_OK = false; pintarTablero(); }
+function fijarPct() {
+  if (!FIJAR_OK) { FIJAR_OK = true; pintarTablero(); return; }
+  FIJAR_OK = false;
+  var n = Math.round(TAB.pct * 1000) / 10;
+  api('pedir', { clave: 'proyeccion', datos: String(n).replace('.', ','), detalle: n + '%' }).then(function (d) {
+    if (d && d.pedidos) { DATA.pedidos = d.pedidos; }
+    toast('Listo: el robot fija el ' + String(n).replace('.', ',') + '% y rearma el informe. ' +
+          'Te aviso cuando termine (lo ves en Mis informes).');
+    pintarTablero();
+  }).catch(function (e) { toast(e.message || e); pintarTablero(); });
 }
 
 /** Barras horizontales: cada local, lo que vendió contra el mismo período del año anterior. */
