@@ -1,0 +1,5 @@
+# Informes JC - app privada del equipo.
+# La página no debe aparecer en buscadores. Los datos están protegidos aparte,
+# por el ingreso con Google y la lista de la planilla Usuarios.
+User-agent: *
+Disallow: /

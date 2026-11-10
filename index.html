@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <title>Informes JC</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- La página es pública (GitHub Pages no permite otra cosa), pero no tiene por qué ser
+       encontrable: esto la saca de Google y de cualquier buscador que respete el estándar.
+       Los datos siguen cerrados por el ingreso con Google y la planilla de Usuarios. -->
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#1f3d5c">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -277,14 +283,6 @@
   .cual-tab button { flex: 1; border: 1px solid var(--line-fuerte); background: var(--card);
     color: var(--muted); border-radius: 10px; padding: 9px 6px; font-size: 13.5px; font-weight: 700;
     cursor: pointer; }
-  .proy-fijar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -4px 0 12px;
-                font-size: 12.5px; color: var(--muted); }
-  .proy-fijar span { flex-basis: 100%; }
-  .proy-fijar button { border: 0; background: var(--brand); color: var(--brand-ink); border-radius: 10px;
-                       padding: 8px 12px; font-weight: 700; font-size: 13px; cursor: pointer; }
-  .proy-fijar button.volver { background: var(--card); color: var(--ink); border: 1px solid var(--line-fuerte); }
-  .tab-mes { display: block; width: 100%; height: calc(100dvh - 190px); min-height: 420px; border: 0;
-             border-radius: 12px; background: #f4f6f9; }
   .cual-tab button.act { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
   .hero { background: var(--brand); color: var(--brand-ink); border-radius: 14px; padding: 16px 18px; }
   .hero .r { font-size: 10.5px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase;
@@ -460,7 +458,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-04 · 4';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-10 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
@@ -881,7 +879,7 @@ function rearmarAhora() {
     if (cual === 'dia' && d.panel) {
       PANEL = d.panel; guardarLocal('panel_', PANEL); pintarPanel(); toast('Tablero al día');
     } else if (cual === 'proy' && d.tablero) {
-      TAB = d.tablero; TAB_MES = -1; TAB_VIG = TAB.pct; guardarLocal('tablero_', TAB); pintarTablero();
+      TAB = d.tablero; TAB_MES = -1; guardarLocal('tablero_', TAB); pintarTablero();
       toast('Tablero al día');
     } else {
       b.disabled = false; b.textContent = '↻ Buscar el informe nuevo';
@@ -897,7 +895,6 @@ function tabsVista() {
   return '<div class="cual-tab">' +
     '<button class="' + (TAB_VISTA === 'dia' ? 'act' : '') + '" onclick="verVista(\'dia\')">Del día</button>' +
     '<button class="' + (TAB_VISTA === 'proy' ? 'act' : '') + '" onclick="verVista(\'proy\')">Proyección</button>' +
-    '<button class="' + (TAB_VISTA === 'mes' ? 'act' : '') + '" onclick="verVista(\'mes\')">Por local</button>' +
     '</div>';
 }
 
@@ -1125,7 +1122,6 @@ function pintarPanel(guardado) {
 
 function cargarTablero() {
   if (TAB_VISTA === 'dia') return cargarPanel();
-  if (TAB_VISTA === 'mes') return cargarMes();
   if (!TAB) {
     try {
       var g = localStorage.getItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''));
@@ -1140,50 +1136,12 @@ function cargarTablero() {
         'En la planilla: Robot 3C › Rearmar el tablero de ventas.</div>';
       return;
     }
-    TAB = d.tablero; TAB_MES = -1; TAB_VIG = TAB.pct; FIJAR_OK = false;
+    TAB = d.tablero; TAB_MES = -1;
     guardarLocal('tablero_', TAB);
     pintarTablero();
   }).catch(function (e) {
     if (!TAB) $('vTablero').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>';
   });
-}
-
-// ---------------------------------------------------------------- tablero del mes por local
-// Réplica de las 9 hojas por sucursal del "Resumen de ventas mensual" (todos los días del mes,
-// Venta año base · Proyectada · Venta actual · Observación, TOTAL MES y resumen al corte).
-// La arma la notebook con el mismo script del informe y la publica todas las noches; acá se
-// muestra tal cual, en un iframe aislado (sandbox sin permisos: no ve la sesión ni la app).
-var MES_HTML = null;
-
-function cargarMes() {
-  if (!MES_HTML) {
-    try {
-      var g = localStorage.getItem('tabmes_' + ((DATA.usuario && DATA.usuario.email) || ''));
-      if (g) MES_HTML = JSON.parse(g);
-    } catch (e) { /* sin guardado */ }
-  }
-  if (MES_HTML) pintarMes();
-  else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero del mes…</div>';
-  api('tablero_mes').then(function (d) {
-    if (TAB_VISTA !== 'mes') return;
-    if (!d.html) {
-      if (!MES_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el ' +
-        'tablero del mes. Lo publica la notebook cuando arma el informe diario, después de las 00:00.</div>';
-      return;
-    }
-    var nuevo = !MES_HTML || MES_HTML.html !== d.html;
-    MES_HTML = { html: d.html, al: d.al || '' };
-    guardarLocal('tabmes_', MES_HTML);
-    if (nuevo) pintarMes();
-  }).catch(function (e) {
-    if (!MES_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">' + esc(e.message || e) + '</div>';
-  });
-}
-
-function pintarMes() {
-  $('vTablero').innerHTML = tabsVista() + avisoAtraso(MES_HTML.al) +
-    '<iframe id="fMes" class="tab-mes" sandbox="allow-scripts" title="Ventas por local del mes"></iframe>';
-  $('fMes').srcdoc = MES_HTML.html;          // por propiedad: sin armar HTML con el contenido
 }
 
 /** Suma de un día: todos los locales, o el elegido. Devuelve null si ese día no corrió. */
@@ -1270,48 +1228,30 @@ function pintarTablero(guardado) {
   }
 }
 
-/** El % de incremento con el que se proyecta la venta.
- *  El − / + es solo para mirar en pantalla ("¿y si fuera 15%?"): no cambia nada.
- *  Para que valga en todos los informes, el administrador toca "Fijar": eso le pide al
- *  robot que lo escriba en el libro (Parámetros!B3) y rearme el informe del día. */
-var TAB_VIG = null, FIJAR_OK = false;
-function pctTxt(f) { return (f * 100).toFixed(1).replace('.', ',').replace(',0', ''); }
+/** El % de incremento con el que se proyecta la venta. Lo cambian los administradores. */
 function mandoPct() {
-  var pct = pctTxt(TAB.pct);
+  var pct = (TAB.pct * 100).toFixed(1).replace('.', ',').replace(',0', '');
   var admin = DATA.usuario && DATA.usuario.rol === 'admin';
-  if (TAB_VIG === null) TAB_VIG = TAB.pct;
   if (!admin) return '<div class="proy">Proyección: <b>+' + pct + '%</b> sobre el año anterior</div>';
-  var h = '<div class="proy">Proyección sobre el año anterior:' +
+  return '<div class="proy">Proyección sobre el año anterior:' +
     '<button onclick="cambiarPct(-1)" aria-label="Bajar">−</button>' +
     '<b>+' + pct + '%</b>' +
     '<button onclick="cambiarPct(1)" aria-label="Subir">+</button></div>';
-  if (Math.abs(TAB.pct - TAB_VIG) > 1e-9) {
-    h += '<div class="proy-fijar"><span>Vigente en los informes: +' + pctTxt(TAB_VIG) + '%. ' +
-         'Lo de arriba es solo una prueba en pantalla.</span>' +
-         '<button onclick="fijarPct()">' + (FIJAR_OK ? 'Tocá de nuevo para confirmar' :
-         'Fijar +' + pct + '% en todos los informes') + '</button>' +
-         '<button class="volver" onclick="volverPct()">Volver a +' + pctTxt(TAB_VIG) + '%</button></div>';
-  }
-  return h;
 }
+var timerPct = null;
 function cambiarPct(d) {
   var n = Math.round(TAB.pct * 100) + d;
-  if (n < -100 || n > 500) return;
+  if (n < 0 || n > 200) return;
   TAB.pct = n / 100;
-  FIJAR_OK = false;
   pintarTablero();
-}
-function volverPct() { TAB.pct = TAB_VIG; FIJAR_OK = false; pintarTablero(); }
-function fijarPct() {
-  if (!FIJAR_OK) { FIJAR_OK = true; pintarTablero(); return; }
-  FIJAR_OK = false;
-  var n = Math.round(TAB.pct * 1000) / 10;
-  api('pedir', { clave: 'proyeccion', datos: String(n).replace('.', ','), detalle: n + '%' }).then(function (d) {
-    if (d && d.pedidos) { DATA.pedidos = d.pedidos; }
-    toast('Listo: el robot fija el ' + String(n).replace('.', ',') + '% y rearma el informe. ' +
-          'Te aviso cuando termine (lo ves en Mis informes).');
-    pintarTablero();
-  }).catch(function (e) { toast(e.message || e); pintarTablero(); });
+  clearTimeout(timerPct);
+  timerPct = setTimeout(function () {          // se guarda una sola vez, al dejar de tocar
+    api('pct_tablero', { pct: TAB.pct }).then(function () {
+      try { localStorage.setItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''),
+                                 JSON.stringify(TAB)); } catch (e) { /* no es grave */ }
+      toast('Proyección guardada');
+    }).catch(function (e) { toast(e.message || e); });
+  }, 900);
 }
 
 /** Barras horizontales: cada local, lo que vendió contra el mismo período del año anterior. */
