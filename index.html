@@ -289,6 +289,11 @@
   .proy-fijar button { border: 0; background: var(--brand); color: var(--brand-ink); border-radius: 10px;
                        padding: 8px 12px; font-weight: 700; font-size: 13px; cursor: pointer; }
   .proy-fijar button.volver { background: var(--card); color: var(--ink); border: 1px solid var(--line-fuerte); }
+  .hoy-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+               margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+  .hoy-barra button { border: 0; background: var(--brand); color: var(--brand-ink); border-radius: 10px;
+                      padding: 9px 14px; font-weight: 700; font-size: 13.5px; cursor: pointer; }
+  .hoy-barra button[disabled] { opacity: .6; cursor: default; }
   .tab-mes { display: block; width: 100%; height: calc(100dvh - 190px); min-height: 420px; border: 0;
              border-radius: 12px; background: #f4f6f9; }
   .cual-tab button.act { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
@@ -466,7 +471,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-10 · 2';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-10 · 5';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
@@ -836,7 +841,7 @@ function cargarAutomaticos() {
 // Los números salen de tablero_ventas.json, que el servidor rearma todas las noches del
 // libro "Vtas diarias por local por mes". Acá no se pide nada a 3C: solo se dibuja.
 var TAB = null, TAB_MES = -1, TAB_LOCAL = -1;   // -1 en local = todos los locales juntos
-var PANEL = null, TAB_VISTA = 'dia';           // 'dia' = el informe de ayer, 'proy' = la proyección
+var PANEL = null, TAB_VISTA = 'hoy';           // arranca en 'hoy' (ventas de hoy); 'dia' = ayer, 'proy', 'mes'
 
 function guita(n) {
   var s = Math.round(Math.abs(n)).toString();
@@ -899,12 +904,19 @@ function rearmarAhora() {
   });
 }
 
+var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Del día'], ['proy', 'Proyección'], ['mes', 'Por local']];
+/** Los tableros que esta persona puede ver (los decide el servidor; un servidor viejo no manda la lista). */
+function vistasMias() {
+  var ok = (DATA && DATA.tableros) || VISTAS_TAB.map(function (v) { return v[0]; });
+  return VISTAS_TAB.filter(function (v) { return ok.indexOf(v[0]) >= 0; });
+}
 function tabsVista() {
-  return '<div class="cual-tab">' +
-    '<button class="' + (TAB_VISTA === 'dia' ? 'act' : '') + '" onclick="verVista(\'dia\')">Del día</button>' +
-    '<button class="' + (TAB_VISTA === 'proy' ? 'act' : '') + '" onclick="verVista(\'proy\')">Proyección</button>' +
-    '<button class="' + (TAB_VISTA === 'mes' ? 'act' : '') + '" onclick="verVista(\'mes\')">Por local</button>' +
-    '</div>';
+  var mias = vistasMias();
+  if (mias.length < 2) return '';
+  return '<div class="cual-tab">' + mias.map(function (v) {
+    return '<button class="' + (TAB_VISTA === v[0] ? 'act' : '') + '" onclick="verVista(\'' + v[0] + '\')">' +
+           v[1] + '</button>';
+  }).join('') + '</div>';
 }
 
 function cargarPanel() {
@@ -1130,8 +1142,11 @@ function pintarPanel(guardado) {
 }
 
 function cargarTablero() {
+  var mias = vistasMias().map(function (v) { return v[0]; });
+  if (mias.length && mias.indexOf(TAB_VISTA) < 0) TAB_VISTA = mias[0];
   if (TAB_VISTA === 'dia') return cargarPanel();
   if (TAB_VISTA === 'mes') return cargarMes();
+  if (TAB_VISTA === 'hoy') return cargarHoy();
   if (!TAB) {
     try {
       var g = localStorage.getItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''));
@@ -1190,6 +1205,69 @@ function pintarMes() {
   $('vTablero').innerHTML = tabsVista() + avisoAtraso(MES_HTML.al) +
     '<iframe id="fMes" class="tab-mes" sandbox="allow-scripts" title="Ventas por local del mes"></iframe>';
   $('fMes').srcdoc = MES_HTML.html;          // por propiedad: sin armar HTML con el contenido
+}
+
+// ---------------------------------------------------------------- ventas de hoy (a pedido)
+// El mismo informe que el botón "Ventas por local", con desde = hasta = hoy. Lo corre el robot
+// en 3C cuando tocás "Actualizar" (tarda un par de minutos) y lo publica acá con la hora.
+var HOY_HTML = null, HOY_ESPERA = null;
+
+function cargarHoy() {
+  if (!HOY_HTML) {
+    try {
+      var g = localStorage.getItem('tabhoy_' + ((DATA.usuario && DATA.usuario.email) || ''));
+      if (g) HOY_HTML = JSON.parse(g);
+    } catch (e) { /* sin guardado */ }
+  }
+  pintarHoy();
+  api('tablero_hoy').then(function (d) {
+    if (TAB_VISTA !== 'hoy') return;
+    if (!d.html) { if (!HOY_HTML) pintarHoy(); return; }
+    var nuevo = !HOY_HTML || HOY_HTML.al !== d.al;
+    HOY_HTML = { html: d.html, al: d.al || '' };
+    guardarLocal('tabhoy_', HOY_HTML);
+    if (nuevo) { if (HOY_ESPERA && HOY_ESPERA.al !== d.al) terminarEspera(); pintarHoy(); }
+  }).catch(function (e) { if (!HOY_HTML) toast(e.message || e); });
+}
+
+function hoyEsDeHoy() {
+  if (!HOY_HTML || !HOY_HTML.al) return false;
+  var h = new Date(), dd = ('0' + h.getDate()).slice(-2) + '/' + ('0' + (h.getMonth() + 1)).slice(-2);
+  return HOY_HTML.al.indexOf(dd + '/') === 0;
+}
+
+function pintarHoy() {
+  var esperando = !!HOY_ESPERA;
+  var barra = '<div class="hoy-barra"><span>' +
+    (HOY_HTML && HOY_HTML.al ? (hoyEsDeHoy() ? 'Actualizado hoy a las ' + esc(HOY_HTML.al.slice(11)) :
+                                'Último: ' + esc(HOY_HTML.al) + ' (no es de hoy)')
+                             : 'Todavía no se pidió') + '</span>' +
+    '<button onclick="actualizarHoy()"' + (esperando ? ' disabled' : '') + '>' +
+    (esperando ? 'Actualizando… (un par de minutos)' : 'Actualizar ahora') + '</button></div>';
+  var cuerpo = HOY_HTML && HOY_HTML.html && hoyEsDeHoy()
+    ? '<iframe id="fHoy" class="tab-mes" sandbox="allow-scripts" title="Ventas de hoy"></iframe>'
+    : '<div class="vacio">Tocá «Actualizar ahora»: el robot baja de 3C las ventas de hoy por local ' +
+      '(lo mismo que el botón Ventas por local) y aparecen acá.</div>';
+  $('vTablero').innerHTML = tabsVista() + barra + cuerpo;
+  if ($('fHoy')) $('fHoy').srcdoc = HOY_HTML.html;
+}
+
+function actualizarHoy() {
+  if (HOY_ESPERA) return;
+  api('actualizar_hoy').then(function (d) {
+    if (d && d.pedidos) DATA.pedidos = d.pedidos;
+    HOY_ESPERA = { al: HOY_HTML ? HOY_HTML.al : '', desde: Date.now() };
+    HOY_ESPERA.t = setInterval(function () {
+      if (Date.now() - HOY_ESPERA.desde > 15 * 60000) { terminarEspera(); if (TAB_VISTA === 'hoy') pintarHoy(); return; }
+      if (TAB_VISTA === 'hoy') cargarHoy();
+    }, 20000);
+    if (TAB_VISTA === 'hoy') pintarHoy();
+  }).catch(function (e) { toast(e.message || e); });
+}
+
+function terminarEspera() {
+  if (HOY_ESPERA && HOY_ESPERA.t) clearInterval(HOY_ESPERA.t);
+  HOY_ESPERA = null;
 }
 
 /** Suma de un día: todos los locales, o el elegido. Devuelve null si ese día no corrió. */
@@ -1506,6 +1584,7 @@ function pintarUsuarios() {
       '<div class="ped-sub">Informes: ' + esc(cuantos(p.informes, USU.catalogo.length)) +
       ' · Automáticos: ' + esc(cuantos(p.automaticos, USU.automaticos.length)) +
       ' · Carpetas: ' + esc(p.carpetas ? cuantos(p.carpetas, (USU.carpetas || []).length) : 'ninguna') +
+      (USU.tableros ? ' · Tableros: ' + esc(p.rol === 'admin' ? 'todos' : cuantos(p.tableros, USU.tableros.length)) : '') +
       '</div>' +
       '<div class="ped-acc"><button class="btn sec" onclick="editarUsuario(' + n + ')">Editar</button></div></div>';
   }).join('');
@@ -1522,7 +1601,7 @@ function casillas(lista, permitidos, prefijo) {
 }
 function editarUsuario(n) {
   var p = n < 0 ? { nombre: '', email: '', rol: 'usuario', informes: '', automaticos: '',
-                    carpetas: '', activo: true }
+                    carpetas: '', tableros: '', activo: true }
                 : USU.usuarios[n];
   EDIT = p;
   var porRubro = {}, orden = [];
@@ -1547,6 +1626,12 @@ function editarUsuario(n) {
   h += '<div class="sub">Informes automáticos</div><div class="chks">' +
        '<label class="chk"><input type="checkbox" onclick="marcarTodo(this, \'ca\')">Todos</label></div>' +
        '<div class="chks">' + casillas(USU.automaticos, p.automaticos, 'ca') + '</div>';
+  if ((USU.tableros || []).length) {
+    h += '<div class="sub">Tableros que puede ver</div>' +
+         '<div class="ped-sub">Los administradores ven todos. "Hoy" incluye poder actualizarlo.</div>' +
+         '<div class="chks"><label class="chk"><input type="checkbox" onclick="marcarTodo(this, \'ct\')">Todos</label></div>' +
+         '<div class="chks">' + casillas(USU.tableros, p.tableros, 'ct') + '</div>';
+  }
   if ((USU.carpetas || []).length) {
     h += '<div class="sub">Carpetas de Drive que puede consultar</div>' +
          '<div class="ped-sub">El asistente solo busca adentro de las que tildes. ' +
@@ -1572,7 +1657,7 @@ function marcadas(clase) {
 function guardarUsuario() {
   var b = $('bGuardar');
   b.disabled = true; b.textContent = 'Guardando…';
-  var inf = marcadas('ci'), aut = marcadas('ca'), car = marcadas('cd');
+  var inf = marcadas('ci'), aut = marcadas('ca'), car = marcadas('cd'), tab = marcadas('ct');
   api('guardar_usuario', {
     email: EDIT.email || $('uMail').value,
     nombre: $('uNombre').value,
@@ -1580,7 +1665,8 @@ function guardarUsuario() {
     activo: $('uActivo').checked,
     informes: inf.length === USU.catalogo.length ? '*' : inf,
     automaticos: aut.length === USU.automaticos.length ? '*' : aut,
-    carpetas: car.length === (USU.carpetas || []).length && car.length ? '*' : car
+    carpetas: car.length === (USU.carpetas || []).length && car.length ? '*' : car,
+    tableros: tab.length === (USU.tableros || []).length && tab.length ? '*' : tab
   }).then(function (d) {
     USU = d; cerrarHoja(); pintarUsuarios(); toast('Guardado');
   }).catch(function (e) {
