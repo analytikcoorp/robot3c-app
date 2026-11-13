@@ -480,8 +480,8 @@
 </main>
 
 <nav hidden id="barra">
+  <button id="tTablero" hidden onclick="verTablero(false)"><span class="i">📈</span><span class="t">Tablero</span></button>
   <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
-  <button id="tTablero" hidden onclick="ver('tablero')"><span class="i">📈</span><span class="t">Tablero</span></button>
   <button id="tPreguntar" hidden onclick="ver('preguntar')"><span class="i">💬</span><span class="t">Preguntar</span></button>
 </nav>
 
@@ -491,6 +491,7 @@
   <div class="cajon-tit">Menú</div>
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
+  <button id="tTableroMas" hidden onclick="verTablero(true)"><span class="i">📈</span><span class="t">Más tableros</span></button>
   <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
   <div class="cajon-pie"><button class="btn sec" onclick="cerrarCajon();menuCuenta()">Mi cuenta</button></div>
 </aside>
@@ -505,7 +506,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-13 · 2';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-13 · 4';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -660,7 +661,7 @@ function entrarApp(d) {
   medirCabecera();
   $('hola').textContent = 'Hola, ' + d.usuario.nombre;
   $('tAuto').hidden = !(d.hay_automaticos || d.hay_tareas);
-  $('tTablero').hidden = !d.hay_tablero;
+  acomodarTableros(d);
   $('tPreguntar').hidden = !d.puede_preguntar;
   $('tUsuarios').hidden = d.usuario.rol !== 'admin';
   acomodarBarra();
@@ -761,7 +762,7 @@ function actualizar() {
   if (!$('vUsuarios').hidden) tareas.push(api('usuarios').then(function (d) { USU = d; pintarUsuarios(); }));
   if (!$('vPedir').hidden) tareas.push(api('inicio').then(function (d) {
     DATA.informes = d.informes; $('tAuto').hidden = !(d.hay_automaticos || d.hay_tareas);
-    $('tTablero').hidden = !d.hay_tablero;
+    acomodarTableros(d);
     $('tPreguntar').hidden = !d.puede_preguntar; acomodarBarra(); pintarInformes();
   }));
   CLIENTES = null;                              // la lista de clientes se vuelve a pedir
@@ -837,10 +838,21 @@ function pintarPedidos() {
 var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: ['vTablero', 'tTablero'],
                preguntar: ['vPreguntar', 'tPreguntar'],
                mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'] };
-/** Si a esta persona no le toca ninguna de las tres pantallas de abajo, la barra se saca
+/** Qué tableros ve esta persona: el completo va al cajón, y Hoy y Resumen de vta tienen
+ *  atajo abajo, pero solo si los tiene habilitados. Un servidor viejo no manda la lista
+ *  de tableros; en ese caso se asume que los tiene todos, como hace vistasMias(). */
+function acomodarTableros(d) {
+  var tabs = d.tableros || ['hoy', 'dia', 'proy', 'mes'];
+  var rapidos = tabs.some(function (v) { return TABS_RAPIDOS.indexOf(v) >= 0; });
+  var otros = tabs.some(function (v) { return TABS_RAPIDOS.indexOf(v) < 0; });
+  $('tTablero').hidden = !d.hay_tablero || !rapidos;
+  $('tTableroMas').hidden = !d.hay_tablero || !otros;
+}
+
+/** Si a esta persona no le toca ninguna de las pantallas de abajo, la barra se saca
  *  entera: una franja vacía al pie se ve como un error. Todo sigue a mano en el cajón. */
 function acomodarBarra() {
-  var hay = ['tAuto', 'tTablero', 'tPreguntar'].some(function (b) { return $(b) && !$(b).hidden; });
+  var hay = ['tTablero', 'tAuto', 'tPreguntar'].some(function (b) { return $(b) && !$(b).hidden; });
   $('barra').hidden = !hay;
   document.body.classList.toggle('sin-barra', !hay);
 }
@@ -856,12 +868,39 @@ function cerrarCajon() {
 /** El velo tapa tanto el cajón como la hoja de abajo: al tocarlo se cierra lo que haya. */
 function cerrarTodo() { cerrarCajon(); cerrarHoja(); }
 
+/**
+ * Hay dos puertas al mismo tablero:
+ *   - "Tablero", abajo: el del día a día, con Hoy y Resumen de vta nada más;
+ *   - "Más tableros", en el cajón: las cuatro vistas, incluidas Proyección y Por local.
+ * TAB_COMPLETO es la que decide cuántas sub-pestañas se dibujan.
+ */
+function verTablero(completo) {
+  TAB_COMPLETO = !!completo;
+  var hay = vistasMias().map(function (v) { return v[0]; });
+  if (hay.indexOf(TAB_VISTA) < 0) TAB_VISTA = hay[0] || 'hoy';
+  else if (completo && TABS_RAPIDOS.indexOf(TAB_VISTA) >= 0) {
+    // al entrar por el cajón se arranca en lo que no está en el atajo de abajo
+    var otros = hay.filter(function (v) { return TABS_RAPIDOS.indexOf(v) < 0; });
+    if (otros.length) TAB_VISTA = otros[0];
+  }
+  ver('tablero');
+}
+
+/** Pinta la puerta por la que se entró. */
+function marcarTablero() {
+  var dentro = !$('vTablero').hidden;
+  var b1 = $('tTablero'), b2 = $('tTableroMas');
+  if (b1) b1.className = (dentro && !TAB_COMPLETO) ? 'act' : '';
+  if (b2) b2.className = (dentro && TAB_COMPLETO) ? 'act' : '';
+}
+
 function ver(v) {
   cerrarCajon();
   for (var k in VISTAS) {
     $(VISTAS[k][0]).hidden = k !== v;
     $(VISTAS[k][1]).className = k === v ? 'act' : '';
   }
+  marcarTablero();
   if (v === 'auto') cargarAutomaticos();
   if (v === 'tablero') cargarTablero();
   if (v === 'preguntar') { pintarPreguntas(); cargarPreguntas(); }
@@ -1078,6 +1117,8 @@ function guardarHora(nombre, boton) {
 // libro "Vtas diarias por local por mes". Acá no se pide nada a 3C: solo se dibuja.
 var TAB = null, TAB_MES = -1, TAB_LOCAL = -1;   // -1 en local = todos los locales juntos
 var PANEL = null, TAB_VISTA = 'hoy';           // arranca en 'hoy' (ventas de hoy); 'dia' = ayer, 'proy', 'mes'
+var TABS_RAPIDOS = ['hoy', 'dia'];             // los que muestra el atajo "Tablero" de abajo
+var TAB_COMPLETO = false;                      // true = se entró por "Más tableros" (las cuatro)
 
 function guita(n) {
   var s = Math.round(Math.abs(n)).toString();
@@ -1102,7 +1143,7 @@ function signo(p) { return (p >= 0 ? '+' : '') + p.toFixed(1).replace('.', ',') 
 function dif(a, b) { return b ? signo(porc(a, b)) : (a ? 'nuevo' : '—'); }
 function claseDif(a, b) { return !b ? '' : (a >= b ? 'sube' : 'baja'); }
 
-function verVista(v) { TAB_VISTA = v; cargarTablero(); window.scrollTo(0, 0); }
+function verVista(v) { TAB_VISTA = v; cargarTablero(); marcarTablero(); window.scrollTo(0, 0); }
 
 function guardarLocal(prefijo, obj) {
   try {
@@ -1140,11 +1181,18 @@ function rearmarAhora() {
   });
 }
 
-var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Del día'], ['proy', 'Proyección'], ['mes', 'Por local']];
+var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Resumen de vta'], ['proy', 'Proyección'], ['mes', 'Por local']];
 /** Los tableros que esta persona puede ver (los decide el servidor; un servidor viejo no manda la lista). */
+/** Las sub-pestañas que le tocan a esta persona Y entran por la puerta que usó: el atajo
+ *  de abajo muestra solo Hoy y Resumen de vta; "Más tableros" muestra las cuatro. */
 function vistasMias() {
   var ok = (DATA && DATA.tableros) || VISTAS_TAB.map(function (v) { return v[0]; });
-  return VISTAS_TAB.filter(function (v) { return ok.indexOf(v[0]) >= 0; });
+  var tiene = VISTAS_TAB.filter(function (v) { return ok.indexOf(v[0]) >= 0; });
+  if (TAB_COMPLETO) return tiene;
+  var rapidas = tiene.filter(function (v) { return TABS_RAPIDOS.indexOf(v[0]) >= 0; });
+  // si a esta persona no le toca ninguna de las rápidas, se le muestran las que tenga:
+  // mejor eso que una pantalla sin ninguna pestaña
+  return rapidas.length ? rapidas : tiene;
 }
 function tabsVista() {
   var mias = vistasMias();
