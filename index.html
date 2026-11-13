@@ -82,6 +82,7 @@
   .estado.off .punto { background: #f0a0a0; }
   #estadoTxt { overflow: hidden; text-overflow: ellipsis; }
   /* el alto real del encabezado lo mide medirCabecera() y lo deja en --alto-cab */
+  body.sin-barra main { padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important; }
   main { padding: calc(var(--alto-cab, 76px) + 14px) 16px calc(84px + env(safe-area-inset-bottom));
     max-width: 760px; margin: 0 auto; }
   .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 10px 12px;
@@ -140,6 +141,30 @@
   nav button.act span.i { opacity: 1; }
   .cont { position: absolute; top: 4px; left: calc(50% + 8px); background: var(--bad); color: #fff; font-size: 10.5px;
     border-radius: 99px; padding: 1px 6px; display: none; }
+  .menu-b { flex: none; border: 0; background: rgba(255,255,255,.12); color: var(--brand-ink);
+    border: 1px solid rgba(255,255,255,.18); border-radius: 10px; width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+  .menu-b .rayas { display: flex; flex-direction: column; gap: 4px; }
+  .menu-b .rayas i { display: block; width: 17px; height: 2px; border-radius: 2px; background: currentColor; }
+  .menu-b .cont { top: -5px; left: auto; right: -5px; }
+  /* Cajón lateral: entra desde la izquierda. Acá van las pantallas que no entran en la
+     barra de abajo, y es donde se suman las que vengan. */
+  .cajon { position: fixed; top: 0; bottom: 0; left: 0; width: min(78vw, 290px); z-index: 10;
+    background: var(--card); border-right: 1px solid var(--line); box-shadow: 2px 0 18px rgba(10,15,25,.18);
+    padding: calc(env(safe-area-inset-top) + 16px) 12px calc(16px + env(safe-area-inset-bottom));
+    transform: translateX(-104%); transition: transform .2s ease; display: flex; flex-direction: column; gap: 4px; }
+  .cajon.abierto { transform: none; }
+  .cajon-tit { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); padding: 2px 10px 10px; }
+  .cajon button { border: 0; background: none; width: 100%; text-align: left; cursor: pointer;
+    display: flex; align-items: center; gap: 12px; padding: 13px 10px; border-radius: 10px;
+    color: var(--text); font-size: 15px; font-weight: 600; position: relative; }
+  .cajon button .i { font-size: 19px; }
+  .cajon button .t { flex: 1; }
+  .cajon button.act { background: var(--accent-bg, rgba(31,61,92,.08)); color: var(--accent); }
+  .cajon button .cont { position: static; display: none; }
+  .cajon-pie { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
+  .cajon-pie .btn { width: 100%; justify-content: center; }
   .velo { position: fixed; inset: 0; background: rgba(10,15,25,.45); z-index: 9; display: none; }
   .hoja { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--card);
     border-radius: 18px 18px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
@@ -436,6 +461,8 @@
 </div>
 
 <header hidden id="cab">
+  <button class="menu-b" id="bMenu" onclick="abrirCajon()" title="Menú" aria-label="Menú">
+    <span class="rayas"><i></i><i></i><i></i></span><span class="cont" id="contMenu"></span></button>
   <div class="marca"><img class="logo" src="logo-jc-blanco.png" alt="JC">
     <div><span class="fecha" id="fecha"></span><span class="hola" id="hola">Cargando…</span></div></div>
   <button class="recargar" id="bRecargar" onclick="actualizar()" title="Actualizar" aria-label="Actualizar">↻</button>
@@ -453,15 +480,22 @@
 </main>
 
 <nav hidden id="barra">
-  <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
   <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
   <button id="tTablero" hidden onclick="ver('tablero')"><span class="i">📈</span><span class="t">Tablero</span></button>
   <button id="tPreguntar" hidden onclick="ver('preguntar')"><span class="i">💬</span><span class="t">Preguntar</span></button>
-  <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
-  <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
 </nav>
 
-<div class="velo" id="velo" onclick="cerrarHoja()"></div>
+<!-- Cajón lateral: lo que no entra abajo. Los botones son los mismos de antes (mismos id),
+     así ver() los sigue marcando como activos sin cambiarle nada. -->
+<aside class="cajon" id="cajon">
+  <div class="cajon-tit">Menú</div>
+  <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
+  <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
+  <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
+  <div class="cajon-pie"><button class="btn sec" onclick="cerrarCajon();menuCuenta()">Mi cuenta</button></div>
+</aside>
+
+<div class="velo" id="velo" onclick="cerrarTodo()"></div>
 <div class="hoja" id="hoja"></div>
 <div class="toast" id="toast"></div>
 
@@ -471,8 +505,9 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-10 · 5';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-13 · 2';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
+var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
 // no quedar tapado. Se mide de verdad (cambia con la muesca del celular y con la fuente).
@@ -551,6 +586,7 @@ function salir(msg) {
   try { localStorage.removeItem('sesion'); } catch (e) {}
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   $('login').style.display = 'flex';
+  cerrarTodo();
   $('cab').hidden = $('cuerpo').hidden = $('barra').hidden = true;
   $('loginErr').textContent = msg || '';
 }
@@ -623,10 +659,11 @@ function entrarApp(d) {
   $('cab').hidden = $('cuerpo').hidden = $('barra').hidden = false;
   medirCabecera();
   $('hola').textContent = 'Hola, ' + d.usuario.nombre;
-  $('tAuto').hidden = !d.hay_automaticos;
+  $('tAuto').hidden = !(d.hay_automaticos || d.hay_tareas);
   $('tTablero').hidden = !d.hay_tablero;
   $('tPreguntar').hidden = !d.puede_preguntar;
   $('tUsuarios').hidden = d.usuario.rol !== 'admin';
+  acomodarBarra();
   pintarEstado(); pintarInformes(); pintarPedidos(); programar();
   prepararAvisos(d.push, d.usuario.email);
 }
@@ -723,9 +760,9 @@ function actualizar() {
   }));
   if (!$('vUsuarios').hidden) tareas.push(api('usuarios').then(function (d) { USU = d; pintarUsuarios(); }));
   if (!$('vPedir').hidden) tareas.push(api('inicio').then(function (d) {
-    DATA.informes = d.informes; $('tAuto').hidden = !d.hay_automaticos;
+    DATA.informes = d.informes; $('tAuto').hidden = !(d.hay_automaticos || d.hay_tareas);
     $('tTablero').hidden = !d.hay_tablero;
-    $('tPreguntar').hidden = !d.puede_preguntar; pintarInformes();
+    $('tPreguntar').hidden = !d.puede_preguntar; acomodarBarra(); pintarInformes();
   }));
   CLIENTES = null;                              // la lista de clientes se vuelve a pedir
   Promise.all(tareas).then(function () { toast('Actualizado'); })
@@ -772,7 +809,13 @@ function pintarInformes() {
 
 function pintarPedidos() {
   var p = DATA.pedidos, activos = p.filter(function (x) { return x.estado === 'pendiente' || x.estado === 'generando'; }).length;
-  var c = $('cont'); c.textContent = activos; c.style.display = activos ? 'block' : 'none';
+  // el contador va en "Mis informes" (dentro del cajón) y repetido sobre el botón del menú,
+  // porque si no, con el cajón cerrado no habría forma de enterarse de que algo terminó
+  [$('cont'), $('contMenu')].forEach(function (c) {
+    if (!c) return;
+    c.textContent = activos;
+    c.style.display = activos ? 'block' : 'none';
+  });
   if (!p.length) { $('vMios').innerHTML = '<div class="vacio">Acá aparecen los informes que pidas.</div>'; return; }
   var nombres = { pendiente: 'En cola', generando: 'Generando…', listo: 'Listo', error: 'Error', cancelado: 'Cancelado' };
   $('vMios').innerHTML = p.map(function (x) {
@@ -794,7 +837,27 @@ function pintarPedidos() {
 var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: ['vTablero', 'tTablero'],
                preguntar: ['vPreguntar', 'tPreguntar'],
                mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'] };
+/** Si a esta persona no le toca ninguna de las tres pantallas de abajo, la barra se saca
+ *  entera: una franja vacía al pie se ve como un error. Todo sigue a mano en el cajón. */
+function acomodarBarra() {
+  var hay = ['tAuto', 'tTablero', 'tPreguntar'].some(function (b) { return $(b) && !$(b).hidden; });
+  $('barra').hidden = !hay;
+  document.body.classList.toggle('sin-barra', !hay);
+}
+
+function abrirCajon() {
+  $('velo').style.display = 'block';
+  requestAnimationFrame(function () { $('cajon').className = 'cajon abierto'; });
+}
+function cerrarCajon() {
+  $('cajon').className = 'cajon';
+  if ($('hoja').className.indexOf('abierta') < 0) $('velo').style.display = 'none';
+}
+/** El velo tapa tanto el cajón como la hoja de abajo: al tocarlo se cierra lo que haya. */
+function cerrarTodo() { cerrarCajon(); cerrarHoja(); }
+
 function ver(v) {
+  cerrarCajon();
   for (var k in VISTAS) {
     $(VISTAS[k][0]).hidden = k !== v;
     $(VISTAS[k][1]).className = k === v ? 'act' : '';
@@ -816,6 +879,7 @@ function claveAutos() {
   return 'autos_' + ((DATA.usuario && DATA.usuario.email) || '');
 }
 function cargarAutomaticos() {
+  if (TAB_AUTO === 'horarios' && DATA.hay_tareas) return cargarTareas();
   // Pedirle la lista al servidor tarda (recorre las carpetas de Drive). Mientras tanto se
   // muestra lo último que se vio, guardado en el celular, y cuando llega lo nuevo se
   // repinta. Así la pantalla abre al toque en vez de quedar en blanco. (03/11/2026)
@@ -837,6 +901,178 @@ function cargarAutomaticos() {
     }
   });
 }
+
+// ---------------------------------------------------------------- horarios (admin)
+// Las tareas programadas de Windows que generan los informes. La lista la manda la
+// notebook al arrancar y cada 30 minutos; acá solo se dibuja. Cambiar una hora es un
+// pedido más de la cola: la notebook es la única que puede tocar el Programador de
+// tareas. Los nombres de las tareas tienen la hora adentro ("0700", "00hs") y quedan
+// desactualizados, así que se muestra el nombre lindo y la hora real de Windows.
+var TAREAS = null;
+
+function claveTareas() { return 'tareas_' + ((DATA.usuario && DATA.usuario.email) || ''); }
+
+function tabsAuto() {
+  if (!DATA.hay_tareas) return '';
+  return '<div class="cual-tab">' +
+    '<button class="' + (TAB_AUTO === 'informes' ? 'act' : '') + '" onclick="verAuto(\'informes\')">Informes</button>' +
+    '<button class="' + (TAB_AUTO === 'horarios' ? 'act' : '') + '" onclick="verAuto(\'horarios\')">Horarios</button>' +
+    '</div>';
+}
+function verAuto(v) { TAB_AUTO = v; cargarAutomaticos(); window.scrollTo(0, 0); }
+
+function cargarTareas() {
+  if (!TAREAS) {
+    try {
+      var g = localStorage.getItem(claveTareas());
+      if (g) TAREAS = JSON.parse(g);
+    } catch (e) { /* sin guardado: se espera al servidor */ }
+  }
+  if (TAREAS) pintarTareas(true);
+  else $('vAuto').innerHTML = tabsAuto() + '<div class="vacio">Buscando los horarios…</div>';
+  api('tareas').then(function (d) {
+    TAREAS = d;
+    try { localStorage.setItem(claveTareas(), JSON.stringify(d)); } catch (e) { /* no es grave */ }
+    pintarTareas();
+  }).catch(function (e) {
+    if (!TAREAS) $('vAuto').innerHTML = tabsAuto() + '<div class="vacio">' + esc(e.message || e) + '</div>';
+  });
+}
+
+/** Lo que devuelve Windows en LastTaskResult, en castellano. */
+function resultadoTarea(r) {
+  if (r === 0) return ['b-listo', 'Terminó bien'];
+  if (r === 267009) return ['b-generando', 'Corriendo ahora'];
+  if (r === 267011) return ['b-pendiente', 'Todavía no corrió'];
+  if (r === 267014) return ['b-cancelado', 'Se canceló'];
+  if (r === null || r === undefined) return ['', ''];
+  return ['b-error', 'Terminó con error (' + r + ')'];
+}
+
+/** "Todos los días a las 03:00", "El día 1 de cada mes a las 01:00", etc. */
+function cuandoCorre(t) {
+  if (t.tipo === 'al_iniciar') return 'Cada vez que se inicia sesión en la notebook';
+  if (t.tipo === 'al_prender') return 'Cada vez que se enciende la notebook';
+  if (!t.hora) return 'Sin hora fija';
+  if (t.tipo === 'diaria') {
+    return (t.intervalo > 1 ? 'Cada ' + t.intervalo + ' días' : 'Todos los días') + ' a las ' + t.hora;
+  }
+  if (t.tipo === 'mensual') {
+    var d = (t.dias || []).join(', ');
+    return (d ? 'El día ' + d + ' de cada mes' : 'Una vez por mes') + ' a las ' + t.hora;
+  }
+  if (t.tipo === 'semanal') {
+    return 'Los ' + (t.dias || []).join(', ') + ' a las ' + t.hora;
+  }
+  return 'A las ' + t.hora;
+}
+
+function proximaLinda(txt) {
+  if (!txt) return '';
+  var p = txt.split(' ');                       // "2026-11-14 00:00:00"
+  if (p.length < 2) return txt;
+  var f = p[0].split('-'), hhmm = p[1].slice(0, 5);
+  var d = new Date(+f[0], +f[1] - 1, +f[2]);
+  var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  var dias = Math.round((d - hoy) / 86400000);
+  if (dias === 0) return 'hoy a las ' + hhmm;
+  if (dias === 1) return 'mañana a las ' + hhmm;
+  return f[2] + '/' + f[1] + ' a las ' + hhmm;
+}
+
+/**
+ * Avisa cuando dos tareas diarias arrancan muy cerca. No es un error: el robot tiene un
+ * candado y la segunda espera su turno. Pero conviene saberlo antes de apretar algo.
+ */
+function avisoJuntas(lista) {
+  var conHora = lista.filter(function (t) { return t.tipo === 'diaria' && t.hora; })
+                     .sort(function (a, b) { return a.hora < b.hora ? -1 : 1; });
+  var pares = [];
+  for (var i = 1; i < conHora.length; i++) {
+    var m = function (h) { return +h.slice(0, 2) * 60 + +h.slice(3, 5); };
+    if (m(conHora[i].hora) - m(conHora[i - 1].hora) <= 30) {
+      pares.push((conHora[i - 1].lindo || conHora[i - 1].nombre) + ' y ' +
+                 (conHora[i].lindo || conHora[i].nombre));
+    }
+  }
+  if (!pares.length) return '';
+  return '<div class="ped-sub" style="margin:-2px 0 12px">' + esc(pares.join(' · ')) +
+         ' arrancan con menos de media hora de diferencia. No se pisan: el robot atiende ' +
+         'de a uno y la segunda espera, pero puede salir más tarde de lo previsto.</div>';
+}
+
+function pintarTareas(guardado) {
+  var d = TAREAS || {}, lista = d.tareas || [];
+  if (!lista.length) {
+    $('vAuto').innerHTML = tabsAuto() + '<div class="vacio">La notebook todavía no mandó la lista ' +
+      'de procesos. Aparece cuando el robot se conecta.</div>';
+    return;
+  }
+  var cab = '';
+  if (guardado) cab = '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste…</div>';
+  else if (d.vieja) cab = '<div class="ped-sub" style="margin:-4px 0 10px">Leído el ' +
+    esc(fechaCorta(d.hecho)) + '. La notebook hace rato que no se conecta, así que estos ' +
+    'horarios pueden no ser los de ahora.</div>';
+  else if (d.hecho) cab = '<div class="ped-sub" style="margin:-4px 0 10px">Leído de la notebook el ' +
+    esc(fechaCorta(d.hecho)) + '.</div>';
+
+  $('vAuto').innerHTML = tabsAuto() + cab + avisoJuntas(lista) + lista.map(function (t) {
+    var res = resultadoTarea(t.resultado);
+    var marca = res[1] ? '<span class="badge ' + res[0] + '">' + esc(res[1]) + '</span>' : '';
+    var filas = '<div class="ped-sub">' + esc(cuandoCorre(t)) + '</div>';
+    if (t.proxima) filas += '<div class="ped-sub">Próxima vez: ' + esc(proximaLinda(t.proxima)) + '</div>';
+    if (t.ultima) filas += '<div class="ped-sub">Última vez: ' + esc(proximaLinda(t.ultima)) + '</div>';
+    var boton = t.editable
+      ? '<div class="ped-acc"><button class="btn sec" onclick="editarHora(\'' +
+        esc(t.nombre).replace(/'/g, '&#39;') + '\')">Cambiar la hora</button></div>'
+      : '';
+    return '<div class="pedido">' +
+             '<div class="ped-top"><span class="ped-nom">' +
+               esc(t.lindo || t.nombre.replace(/^Robot 3C - /, '')) + '</span>' + marca + '</div>' +
+             filas +
+             '<div class="ped-sub" style="opacity:.55">' + esc(t.nombre) + '</div>' +
+             boton +
+           '</div>';
+  }).join('');
+}
+
+function editarHora(nombre) {
+  var t = ((TAREAS || {}).tareas || []).filter(function (x) { return x.nombre === nombre; })[0];
+  if (!t) return;
+  var aviso = t.historial === false
+    ? '<div class="ped-sub" style="margin-top:10px">Windows no deja cambiarle la hora a una tarea ' +
+      'mensual sin volver a crearla, así que el historial de corridas va a arrancar de cero. ' +
+      'La programación (día del mes) no se toca.</div>'
+    : '';
+  $('hoja').innerHTML =
+    '<h2>' + esc(t.lindo || t.nombre) + '</h2>' +
+    '<div class="ped-sub">' + esc(cuandoCorre(t)) + '</div>' +
+    '<div class="sub">Nueva hora</div>' +
+    '<input id="horaNueva" type="time" value="' + esc(t.hora || '') + '" ' +
+      'style="font-size:1.4rem;padding:10px;width:100%;box-sizing:border-box">' +
+    aviso +
+    '<div class="acciones" style="margin-top:18px">' +
+      '<button class="btn" onclick="guardarHora(\'' + esc(nombre).replace(/'/g, '&#39;') + '\',this)">Cambiar</button>' +
+      '<button class="btn sec" onclick="cerrarHoja()">Cancelar</button>' +
+    '</div>';
+  $('velo').style.display = 'block';
+  requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
+}
+
+function guardarHora(nombre, boton) {
+  var hora = ($('horaNueva') || {}).value || '';
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) { toast('Poné una hora válida.'); return; }
+  boton.disabled = true; boton.textContent = 'Mandando…';
+  api('horario', { tarea: nombre, hora: hora }).then(function () {
+    cerrarHoja();
+    toast('Pedido mandado. La notebook lo aplica en unos segundos.');
+    setTimeout(function () { TAREAS = null; if (TAB_AUTO === 'horarios') cargarTareas(); }, 12000);
+  }).catch(function (e) {
+    boton.disabled = false; boton.textContent = 'Cambiar';
+    toast(e.message || 'No pude mandar el cambio.');
+  });
+}
+
 // ---------------------------------------------------------------- tablero de ventas
 // Los números salen de tablero_ventas.json, que el servidor rearma todas las noches del
 // libro "Vtas diarias por local por mes". Acá no se pide nada a 3C: solo se dibuja.
@@ -1485,10 +1721,10 @@ function resumenHoy() {
 
 function pintarAutomaticos(guardado) {
   if (!AUTOS || !AUTOS.length) {
-    $('vAuto').innerHTML = '<div class="vacio">No tenés informes automáticos habilitados.</div>'; return;
+    $('vAuto').innerHTML = tabsAuto() + '<div class="vacio">No tenés informes automáticos habilitados.</div>'; return;
   }
   var aviso = guardado ? '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste · buscando novedades…</div>' : '';
-  $('vAuto').innerHTML = resumenHoy() + aviso + AUTOS.map(function (a) {
+  $('vAuto').innerHTML = tabsAuto() + resumenHoy() + aviso + AUTOS.map(function (a) {
     var arch = a.archivos.length ? a.archivos.map(function (f) {
       return '<button class="btn sec arch" onclick="bajarAuto(\'' + esc(a.clave) + '\',\'' +
         esc(f.fid) + '\',this)"><span class="arch-nom">' + esc(f.titulo || f.nombre) + '</span>' +
