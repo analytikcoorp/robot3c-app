@@ -55,6 +55,13 @@
      ningún ancestro tenga overflow y en el Safari del celular no quedaba fijo. */
   html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: clip;
     font: 15px/1.45 "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  /* En iOS, la barra del navegador al aparecer y desaparecer despega los elementos
+     "fixed" y no siempre los vuelve a su lugar: la barra de abajo terminaba flotando en
+     el medio. La solución es que la página no scrollee: scrollea solo el contenido, en
+     un recuadro entre el encabezado y la barra. Así ninguno de los dos se puede mover. */
+  /* Con el encabezado, el contenido y la barra los tres "fixed", al body no le queda
+     nada en el flujo: no hay nada que scrollear. El overflow es por las dudas. */
+  body.app { height: 100%; overflow: hidden; }
   .num { font-variant-numeric: tabular-nums; }
   button { font: inherit; color: inherit; }
   header { position: fixed; top: 0; left: 0; right: 0; z-index: 6; background: var(--brand); color: var(--brand-ink);
@@ -85,6 +92,17 @@
   body.sin-barra main { padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important; }
   main { padding: calc(var(--alto-cab, 76px) + 14px) 16px calc(84px + env(safe-area-inset-bottom));
     max-width: 760px; margin: 0 auto; }
+  /* Con la página quieta, main es el que scrollea y ocupa justo el hueco que queda
+     libre. Los títulos pegajosos de adentro se pegan a su borde de arriba (top: 0),
+     que ya es el borde de abajo del encabezado. */
+  body.app main { position: fixed; top: var(--alto-cab, 76px); left: 0; right: 0;
+    bottom: var(--alto-barra, 0px); overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    padding: 0 16px calc(18px + env(safe-area-inset-bottom)); }
+  /* El respiro de arriba va adentro de la sección, no en main: si fuera padding de main,
+     los títulos pegajosos se pegarían 14px más abajo y las filas asomarían por encima.
+     El límite de ancho también se muda acá, porque main ahora ocupa todo el hueco. */
+  body.app main > section { max-width: 760px; margin: 0 auto; padding-top: 14px; }
   .aviso { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 10px 12px;
     font-size: 13.5px; margin-bottom: 12px; display: none; }
   .rubro { margin: 20px 2px 9px; font-size: 11.5px; font-weight: 800; color: var(--accent-claro);
@@ -388,7 +406,7 @@
   /* la tabla es larga: los títulos quedan pegados abajo del encabezado al bajar */
   .tdias th { text-align: right; color: var(--muted); font-size: 10.5px; text-transform: uppercase;
     padding: 6px 0; border-bottom: 1px solid var(--line-fuerte); font-weight: 800;
-    position: sticky; top: var(--alto-cab, 76px); background: var(--card); z-index: 2; }
+    position: sticky; top: 0; background: var(--card); z-index: 2; }
   .tdias th:first-child, .tdias td:first-child { text-align: left; }
   .tdias td { text-align: right; padding: 5px 0; border-bottom: 1px solid var(--line); }
   .tdias td + td, .tdias th + th { padding-left: 7px; }   /* que no se toquen las columnas */
@@ -506,17 +524,18 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-13 · 4';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-14 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
 // no quedar tapado. Se mide de verdad (cambia con la muesca del celular y con la fuente).
+/** Mide el encabezado y la barra de abajo: entre los dos definen el hueco que ocupa el
+ *  contenido, que es el único que scrollea. Se vuelve a medir al rotar o cambiar el tamaño. */
 function medirCabecera() {
-  var c = $('cab');
-  if (!c || c.hidden) return;
-  var alto = c.offsetHeight;
-  if (alto) document.documentElement.style.setProperty('--alto-cab', alto + 'px');
+  var c = $('cab'), b = $('barra'), r = document.documentElement.style;
+  if (c && !c.hidden && c.offsetHeight) r.setProperty('--alto-cab', c.offsetHeight + 'px');
+  r.setProperty('--alto-barra', (b && !b.hidden && b.offsetHeight ? b.offsetHeight : 0) + 'px');
 }
 window.addEventListener('resize', medirCabecera);
 window.addEventListener('orientationchange', function () { setTimeout(medirCabecera, 250); });
@@ -588,6 +607,7 @@ function salir(msg) {
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   $('login').style.display = 'flex';
   cerrarTodo();
+  document.body.classList.remove('app');     // la pantalla de ingreso sí scrollea normal
   $('cab').hidden = $('cuerpo').hidden = $('barra').hidden = true;
   $('loginErr').textContent = msg || '';
 }
@@ -657,6 +677,7 @@ function probarAviso(b) {
 function entrarApp(d) {
   DATA = d;
   $('login').style.display = 'none';
+  document.body.classList.add('app');        // de acá en más scrollea el contenido, no la página
   $('cab').hidden = $('cuerpo').hidden = $('barra').hidden = false;
   medirCabecera();
   $('hola').textContent = 'Hola, ' + d.usuario.nombre;
@@ -855,6 +876,14 @@ function acomodarBarra() {
   var hay = ['tTablero', 'tAuto', 'tPreguntar'].some(function (b) { return $(b) && !$(b).hidden; });
   $('barra').hidden = !hay;
   document.body.classList.toggle('sin-barra', !hay);
+  medirCabecera();     // la altura de la barra define dónde termina el contenido
+}
+
+/** Lleva el contenido al principio. Ahora el que scrollea es main, no la página. */
+function alPrincipio() {
+  var m = $('cuerpo');
+  if (m && m.scrollTo) m.scrollTo(0, 0); else if (m) m.scrollTop = 0;
+  window.scrollTo(0, 0);       // por si algún navegador viejo sigue scrolleando la página
 }
 
 function abrirCajon() {
@@ -905,7 +934,7 @@ function ver(v) {
   if (v === 'tablero') cargarTablero();
   if (v === 'preguntar') { pintarPreguntas(); cargarPreguntas(); }
   if (v === 'usuarios') cargarUsuarios();
-  window.scrollTo(0, 0);
+  alPrincipio();
 }
 
 // ---------------------------------------------------------------- automáticos
@@ -958,7 +987,7 @@ function tabsAuto() {
     '<button class="' + (TAB_AUTO === 'horarios' ? 'act' : '') + '" onclick="verAuto(\'horarios\')">Horarios</button>' +
     '</div>';
 }
-function verAuto(v) { TAB_AUTO = v; cargarAutomaticos(); window.scrollTo(0, 0); }
+function verAuto(v) { TAB_AUTO = v; cargarAutomaticos(); alPrincipio(); }
 
 function cargarTareas() {
   if (!TAREAS) {
@@ -1143,7 +1172,7 @@ function signo(p) { return (p >= 0 ? '+' : '') + p.toFixed(1).replace('.', ',') 
 function dif(a, b) { return b ? signo(porc(a, b)) : (a ? 'nuevo' : '—'); }
 function claseDif(a, b) { return !b ? '' : (a >= b ? 'sube' : 'baja'); }
 
-function verVista(v) { TAB_VISTA = v; cargarTablero(); marcarTablero(); window.scrollTo(0, 0); }
+function verVista(v) { TAB_VISTA = v; cargarTablero(); marcarTablero(); alPrincipio(); }
 
 function guardarLocal(prefijo, obj) {
   try {
@@ -1577,7 +1606,7 @@ function mesTablero() {
   return TAB.meses[TAB_MES];
 }
 
-function verMes(i) { TAB_MES = i; pintarTablero(); window.scrollTo(0, 0); }
+function verMes(i) { TAB_MES = i; pintarTablero(); alPrincipio(); }
 function verLocal(i) { TAB_LOCAL = i; pintarTablero(); }
 
 function pintarTablero(guardado) {
