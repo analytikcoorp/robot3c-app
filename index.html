@@ -524,7 +524,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-14 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-15 · 2';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -863,7 +863,7 @@ var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: [
  *  atajo abajo, pero solo si los tiene habilitados. Un servidor viejo no manda la lista
  *  de tableros; en ese caso se asume que los tiene todos, como hace vistasMias(). */
 function acomodarTableros(d) {
-  var tabs = d.tableros || ['hoy', 'dia', 'proy', 'mes'];
+  var tabs = d.tableros || ['hoy', 'dia', 'proy', 'mes', 'bancos'];
   var rapidos = tabs.some(function (v) { return TABS_RAPIDOS.indexOf(v) >= 0; });
   var otros = tabs.some(function (v) { return TABS_RAPIDOS.indexOf(v) < 0; });
   $('tTablero').hidden = !d.hay_tablero || !rapidos;
@@ -1146,7 +1146,7 @@ function guardarHora(nombre, boton) {
 // libro "Vtas diarias por local por mes". Acá no se pide nada a 3C: solo se dibuja.
 var TAB = null, TAB_MES = -1, TAB_LOCAL = -1;   // -1 en local = todos los locales juntos
 var PANEL = null, TAB_VISTA = 'hoy';           // arranca en 'hoy' (ventas de hoy); 'dia' = ayer, 'proy', 'mes'
-var TABS_RAPIDOS = ['hoy', 'dia'];             // los que muestra el atajo "Tablero" de abajo
+var TABS_RAPIDOS = ['hoy', 'dia', 'bancos'];   // los que muestra el atajo "Tablero" de abajo (Bancos desde el 15/11)
 var TAB_COMPLETO = false;                      // true = se entró por "Más tableros" (las cuatro)
 
 function guita(n) {
@@ -1210,7 +1210,8 @@ function rearmarAhora() {
   });
 }
 
-var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Resumen de vta'], ['proy', 'Proyección'], ['mes', 'Por local']];
+var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Resumen de vta'], ['proy', 'Proyección'], ['mes', 'Por local'],
+                  ['bancos', 'Bancos']];
 /** Los tableros que esta persona puede ver (los decide el servidor; un servidor viejo no manda la lista). */
 /** Las sub-pestañas que le tocan a esta persona Y entran por la puerta que usó: el atajo
  *  de abajo muestra solo Hoy y Resumen de vta; "Más tableros" muestra las cuatro. */
@@ -1460,6 +1461,7 @@ function cargarTablero() {
   if (TAB_VISTA === 'dia') return cargarPanel();
   if (TAB_VISTA === 'mes') return cargarMes();
   if (TAB_VISTA === 'hoy') return cargarHoy();
+  if (TAB_VISTA === 'bancos') return cargarBancos();
   if (!TAB) {
     try {
       var g = localStorage.getItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''));
@@ -1518,6 +1520,44 @@ function pintarMes() {
   $('vTablero').innerHTML = tabsVista() + avisoAtraso(MES_HTML.al) +
     '<iframe id="fMes" class="tab-mes" sandbox="allow-scripts" title="Ventas por local del mes"></iframe>';
   $('fMes').srcdoc = MES_HTML.html;          // por propiedad: sin armar HTML con el contenido
+}
+
+// ---------------------------------------------------------------- bancos (15/11/2026)
+// Saldos contra acuerdos, cheques debitados y a cubrir, Mercado Pago, embargos y cheques de
+// terceros en cartera. Lo arma la notebook con el Informe Bancos diario de la mañana y lo
+// publica sola cuando llega uno nuevo; acá se muestra tal cual, en un iframe aislado.
+var BANCOS_HTML = null;
+
+function cargarBancos() {
+  if (!BANCOS_HTML) {
+    try {
+      var g = localStorage.getItem('tabbancos_' + ((DATA.usuario && DATA.usuario.email) || ''));
+      if (g) BANCOS_HTML = JSON.parse(g);
+    } catch (e) { /* sin guardado */ }
+  }
+  if (BANCOS_HTML) pintarBancos();
+  else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero de bancos…</div>';
+  api('tablero_bancos').then(function (d) {
+    if (TAB_VISTA !== 'bancos') return;
+    if (!d.html) {
+      if (!BANCOS_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el ' +
+        'tablero de bancos. Lo publica la notebook cuando sale el Informe Bancos diario, a la mañana.</div>';
+      return;
+    }
+    var nuevo = !BANCOS_HTML || BANCOS_HTML.html !== d.html;
+    BANCOS_HTML = { html: d.html, al: d.al || '' };
+    guardarLocal('tabbancos_', BANCOS_HTML);
+    if (nuevo) pintarBancos();
+  }).catch(function (e) {
+    if (!BANCOS_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">' + esc(e.message || e) + '</div>';
+  });
+}
+
+function pintarBancos() {
+  // sin aviso de atraso: el informe de bancos sale solo los días hábiles (la fecha va adentro)
+  $('vTablero').innerHTML = tabsVista() +
+    '<iframe id="fBancos" class="tab-mes" sandbox="allow-scripts" title="Bancos"></iframe>';
+  $('fBancos').srcdoc = BANCOS_HTML.html;
 }
 
 // ---------------------------------------------------------------- ventas de hoy (a pedido)
