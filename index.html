@@ -377,7 +377,11 @@
   .rearmar button[disabled] { opacity: .6; cursor: default; }
   .atrasado { background: var(--warn-bg); color: var(--warn); border-radius: 10px;
     padding: 9px 12px; font-size: 12.5px; font-weight: 600; margin: 0 0 10px; }
-  .cual-tab { display: flex; gap: 6px; margin: 0 0 12px; }
+  /* Las pestañas del tablero quedan fijas arriba mientras se scrollea. El que scrollea es
+     main, así que sticky se agarra de ahí. El margin negativo le come el padding-top de la
+     sección: sin eso quedaría una franja de fondo arriba al pegarse. */
+  .cual-tab { display: flex; gap: 6px; position: sticky; top: 0; z-index: 3;
+    background: var(--bg); margin: -14px 0 12px; padding: 14px 0 10px; }
   .cual-tab button { flex: 1; border: 1px solid var(--line-fuerte); background: var(--card);
     color: var(--muted); border-radius: 10px; padding: 9px 6px; font-size: 13.5px; font-weight: 700;
     cursor: pointer; }
@@ -585,7 +589,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 9';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 10';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1695,6 +1699,60 @@ function cargarTablero() {
   });
 }
 
+// ------------------------------------------------- los tableros que vienen en un iframe
+/* Tres tableros (Hoy, Por local y Bancos) llegan como HTML armado por la notebook y se
+   muestran en un iframe aislado. El iframe tenía alto fijo (una pantalla), y eso dejaba
+   DOS zonas que scrollean, una adentro de la otra: en el celular el dedo movía la de
+   adentro y la de afuera no se enteraba, así que a veces no se podía seguir bajando.
+
+   Ahora el iframe se estira hasta el alto de su contenido y scrollea una sola cosa, la
+   pantalla. El alto lo dice el propio contenido: se le agrega un script que se lo manda
+   al padre con postMessage. Si ese mensaje no llega —script bloqueado, contenido raro—
+   queda el alto fijo del CSS, que es como venía funcionando. */
+
+// El medidor que se le agrega al HTML del tablero. Avisa al cargar, al cambiar de tamaño
+// y dos veces más por si algo del contenido acomoda la página después.
+/* Ojo con cómo se mide: documentElement.scrollHeight nunca baja del alto de la ventana del
+   iframe, así que con un tablero corto devolvía "una pantalla" y quedaba un hueco abajo. Se
+   mide el body y, por si el tablero usa html,body{height:100%}, también hasta dónde llega
+   el último hijo. */
+var MEDIDOR_ALTO =
+  '<scr' + 'ipt>(function(){function m(){var d=document,b=d.body;if(!b)return;' +
+  'var a=Math.max(b.scrollHeight,b.offsetHeight),y=(d.documentElement.scrollTop||b.scrollTop||0),i,r;' +
+  'for(i=0;i<b.children.length;i++){r=b.children[i].getBoundingClientRect();' +
+  'if(r.bottom+y>a)a=r.bottom+y;}' +
+  'try{parent.postMessage({tablero:"alto",alto:Math.ceil(a)+8},"*");}catch(e){}}' +
+  'if(document.readyState==="complete")m();else addEventListener("load",m);' +
+  'addEventListener("resize",m);setTimeout(m,400);setTimeout(m,1500);})();</scr' + 'ipt>';
+
+var IFRAMES_TAB = ['fMes', 'fBancos', 'fHoy'];
+
+/** Carga el HTML en el iframe con el medidor puesto. */
+function meterTablero(id, html) {
+  var f = $(id);
+  if (!f) return;
+  f.style.height = ''; f.style.minHeight = '';   // hasta que el contenido diga el suyo, el del CSS
+  f.srcdoc = html + MEDIDOR_ALTO;
+}
+
+/* El iframe va sin allow-same-origin, así que su origen es "null" y no sirve para
+   identificarlo: se compara contra el contentWindow de los nuestros, que es lo que no se
+   puede falsificar desde otra ventana. Del mensaje se usa un solo número, y acotado. */
+window.addEventListener('message', function (e) {
+  var d = e.data;
+  if (!d || d.tablero !== 'alto') return;
+  for (var i = 0; i < IFRAMES_TAB.length; i++) {
+    var f = $(IFRAMES_TAB[i]);
+    if (f && e.source === f.contentWindow) {
+      var alto = Number(d.alto) || 0;
+      if (alto < 60 || alto > 30000) return;     // un alto absurdo no se toca
+      f.style.height = alto + 'px';
+      f.style.minHeight = '0';                   // si el contenido es corto, no dejar hueco
+      return;
+    }
+  }
+});
+
 // ---------------------------------------------------------------- tablero del mes por local
 // Réplica de las 9 hojas por sucursal del "Resumen de ventas mensual" (todos los días del mes,
 // Venta año base · Proyectada · Venta actual · Observación, TOTAL MES y resumen al corte).
@@ -1730,7 +1788,7 @@ function cargarMes() {
 function pintarMes() {
   $('vTablero').innerHTML = tabsVista() + avisoAtraso(MES_HTML.al) +
     '<iframe id="fMes" class="tab-mes" sandbox="allow-scripts" title="Ventas por local del mes"></iframe>';
-  $('fMes').srcdoc = MES_HTML.html;          // por propiedad: sin armar HTML con el contenido
+  meterTablero('fMes', MES_HTML.html);       // por propiedad: sin armar HTML con el contenido
 }
 
 // ---------------------------------------------------------------- bancos (15/11/2026)
@@ -1768,7 +1826,7 @@ function pintarBancos() {
   // sin aviso de atraso: el informe de bancos sale solo los días hábiles (la fecha va adentro)
   $('vTablero').innerHTML = tabsVista() +
     '<iframe id="fBancos" class="tab-mes" sandbox="allow-scripts" title="Bancos"></iframe>';
-  $('fBancos').srcdoc = BANCOS_HTML.html;
+  meterTablero('fBancos', BANCOS_HTML.html);
 }
 
 // ---------------------------------------------------------------- ventas de hoy (a pedido)
@@ -1813,7 +1871,7 @@ function pintarHoy() {
     : '<div class="vacio">Tocá «Actualizar ahora»: el robot baja de 3C las ventas de hoy por local ' +
       '(lo mismo que el botón Ventas por local) y aparecen acá.</div>';
   $('vTablero').innerHTML = tabsVista() + barra + cuerpo;
-  if ($('fHoy')) $('fHoy').srcdoc = HOY_HTML.html;
+  if ($('fHoy')) meterTablero('fHoy', HOY_HTML.html);
 }
 
 function actualizarHoy() {
