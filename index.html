@@ -152,6 +152,27 @@
     font-variant-numeric: tabular-nums; }
   .btn:disabled { opacity: .5; }
   .vacio { text-align: center; color: var(--muted); padding: 40px 10px; }
+  /* ---- Actividad (admin): control de pedidos y fallas ---- */
+  .act-res { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
+  @media (max-width: 380px) { .act-res { grid-template-columns: repeat(2, 1fr); } }
+  .act-caja { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 11px 8px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    min-width: 0; }
+  .act-caja .n { font-size: 22px; font-weight: 800; letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums; }
+  .act-caja .l { font-size: 11px; color: var(--muted); text-align: center; }
+  .act-caja.act-ok { background: var(--ok-bg); border-color: var(--ok); }
+  .act-caja.act-ok .n, .act-caja.act-ok .l { color: var(--ok); }
+  .act-caja.act-mal { background: var(--bad-bg); border-color: var(--bad); }
+  .act-caja.act-mal .n, .act-caja.act-mal .l { color: var(--bad); }
+  .act-caja.act-espera { background: var(--warn-bg); border-color: var(--warn); }
+  .act-caja.act-espera .n, .act-caja.act-espera .l { color: var(--warn); }
+  .act-per { display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    border-top: 1px solid var(--line); }
+  .act-per:first-child { border-top: 0; }
+  .act-per .nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  .act-per b { font-variant-numeric: tabular-nums; }
   nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
     display: flex; padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
   nav button { flex: 1 1 0; min-width: 0; border: 0; background: none; padding: 10px 2px 12px;
@@ -531,6 +552,7 @@
   <section id="vPreguntar" hidden></section>
   <section id="vMios" hidden></section>
   <section id="vUsuarios" hidden></section>
+  <section id="vActividad" hidden></section>
 </main>
 
 <nav hidden id="barra">
@@ -549,6 +571,7 @@
   <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
   <button id="tComandos" hidden onclick="ver('comandos')"><span class="i">🤖</span><span class="t">Comandos</span></button>
   <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
+  <button id="tActividad" hidden onclick="ver('actividad')"><span class="i">📊</span><span class="t">Actividad</span></button>
   <div class="cajon-pie"><button class="btn sec" onclick="cerrarCajon();menuCuenta()">Mi cuenta</button></div>
 </aside>
 
@@ -562,7 +585,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 8';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 9';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -723,7 +746,7 @@ function entrarApp(d) {
   $('tAuto').hidden = !(d.hay_automaticos || d.hay_tareas);
   acomodarTableros(d);
   $('tPreguntar').hidden = !d.puede_preguntar;
-  $('tUsuarios').hidden = d.usuario.rol !== 'admin';
+  $('tUsuarios').hidden = $('tActividad').hidden = d.usuario.rol !== 'admin';
   acomodarBarra();
   pintarEstado(); pintarInformes(); pintarPedidos(); programar();
   pantallaDeArranque(d);
@@ -747,7 +770,7 @@ function pantallaDeArranque(d) {
   if (!elegido) return;
   if (elegido === 'dia') return irPrincipal();     // el tablero de ventas es la pantalla de inicio
   TAB_VISTA = elegido;
-  verTablero(TABS_RAPIDOS.indexOf(elegido) < 0);    // los que no son atajo abren el completo
+  verTablero(noEsRapido(elegido));    // los que no son atajo abren el completo
 }
 
 /**
@@ -938,14 +961,15 @@ var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: [
                preguntar: ['vPreguntar', 'tPreguntar'],
                mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'],
                comandos: ['vComandos', 'tComandos'],
+               actividad: ['vActividad', 'tActividad'],
                principal: ['vPrincipal', 'tPrincipal'] };
 /** Qué tableros ve esta persona: el completo va al cajón, y Hoy y Resumen de vta tienen
  *  atajo abajo, pero solo si los tiene habilitados. Un servidor viejo no manda la lista
  *  de tableros; en ese caso se asume que los tiene todos, como hace vistasMias(). */
 function acomodarTableros(d) {
   var tabs = d.tableros || ['hoy', 'dia', 'proy', 'mes', 'bancos'];
-  var rapidos = tabs.some(function (v) { return TABS_RAPIDOS.indexOf(v) >= 0; });
-  var otros = tabs.some(function (v) { return TABS_RAPIDOS.indexOf(v) < 0; });
+  var rapidos = tabs.some(esRapido);
+  var otros = tabs.some(noEsRapido);
   $('tPrincipal').hidden = !d.hay_tablero || tabs.indexOf('dia') < 0;
   $('tTablero').hidden = !d.hay_tablero || !rapidos;
   $('tTableroMas').hidden = !d.hay_tablero || !otros;
@@ -988,9 +1012,9 @@ function verTablero(completo) {
   TAB_COMPLETO = !!completo;
   var hay = vistasMias().map(function (v) { return v[0]; });
   if (hay.indexOf(TAB_VISTA) < 0) TAB_VISTA = hay[0] || 'hoy';
-  else if (completo && TABS_RAPIDOS.indexOf(TAB_VISTA) >= 0) {
+  else if (completo && esRapido(TAB_VISTA)) {
     // al entrar por el cajón se arranca en lo que no está en el atajo de abajo
-    var otros = hay.filter(function (v) { return TABS_RAPIDOS.indexOf(v) < 0; });
+    var otros = hay.filter(noEsRapido);
     if (otros.length) TAB_VISTA = otros[0];
   }
   ver('tablero');
@@ -1113,6 +1137,7 @@ function ver(v) {
   if (v === 'tablero') cargarTablero();
   if (v === 'preguntar') { pintarPreguntas(); cargarPreguntas(); }
   if (v === 'usuarios') cargarUsuarios();
+  if (v === 'actividad') cargarActividad();
   alPrincipio();
 }
 
@@ -1325,7 +1350,13 @@ function guardarHora(nombre, boton) {
 // libro "Vtas diarias por local por mes". Acá no se pide nada a 3C: solo se dibuja.
 var TAB = null, TAB_MES = -1, TAB_LOCAL = -1;   // -1 en local = todos los locales juntos
 var PANEL = null, TAB_VISTA = 'hoy';           // arranca en 'hoy' (ventas de hoy); 'dia' = ayer, 'proy', 'mes'
-var TABS_RAPIDOS = ['hoy', 'dia', 'bancos'];   // los que muestra el atajo "Tablero" de abajo (Bancos desde el 15/11)
+/** Qué tableros muestra el atajo "Tablero" de abajo. Está al revés a propósito: en vez de
+ *  nombrar los rápidos, se nombran los dos que NO lo son. Así, cuando se agrega un tablero
+ *  nuevo, aparece solo en el acceso directo y no hay que acordarse de anotarlo acá.
+ *  Proyección y Por local se consultan de vez en cuando: siguen en "Más tableros". */
+var TABS_LENTOS = ['proy', 'mes'];
+function esRapido(v) { return TABS_LENTOS.indexOf(v) < 0; }
+function noEsRapido(v) { return TABS_LENTOS.indexOf(v) >= 0; }
 var TAB_COMPLETO = false;                      // true = se entró por "Más tableros" (las cuatro)
 
 function guita(n) {
@@ -1398,7 +1429,7 @@ function vistasMias() {
   var ok = (DATA && DATA.tableros) || VISTAS_TAB.map(function (v) { return v[0]; });
   var tiene = VISTAS_TAB.filter(function (v) { return ok.indexOf(v[0]) >= 0; });
   if (TAB_COMPLETO) return tiene;
-  var rapidas = tiene.filter(function (v) { return TABS_RAPIDOS.indexOf(v[0]) >= 0; });
+  var rapidas = tiene.filter(function (v) { return esRapido(v[0]); });
   // si a esta persona no le toca ninguna de las rápidas, se le muestran las que tenga:
   // mejor eso que una pantalla sin ninguna pestaña
   return rapidas.length ? rapidas : tiene;
@@ -2205,6 +2236,128 @@ function guardarUsuario() {
   }).catch(function (e) {
     b.disabled = false; b.textContent = 'Guardar'; toast(e.message || e);
   });
+}
+
+// ---------------------------------------------------------------- actividad (admin)
+// Control de lo que pasa: qué pidió cada persona y qué falló. Los datos salen de las dos
+// hojas que ya se escriben solas (Pedidos y Auditoría); acá no se registra nada nuevo.
+var ACT = null;
+var ACT_DIAS = 7;
+
+function cargarActividad() {
+  if (ACT && ACT.dias === ACT_DIAS) pintarActividad();
+  else $('vActividad').innerHTML = '<div class="vacio">Cargando…</div>';
+  api('actividad', { dias: ACT_DIAS }).then(function (d) {
+    ACT = d; pintarActividad();
+  }).catch(function (e) {
+    $('vActividad').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>';
+  });
+}
+
+function verActividad(dias) {
+  if (dias === ACT_DIAS) return;
+  ACT_DIAS = dias; ACT = null; cargarActividad(); alPrincipio();
+}
+
+/** "2 m 14 s" / "48 s". Null cuando el pedido sigue abierto. */
+function demoraTxt(s) {
+  if (s === null || s === undefined) return '';
+  if (s < 60) return s + ' s';
+  var m = Math.floor(s / 60);
+  return m + ' m' + (s % 60 ? ' ' + (s % 60) + ' s' : '');
+}
+
+/** Las acciones de la auditoría, en castellano. */
+var NOMBRE_FALLA = {
+  rechazado: 'Ingreso rechazado',
+  pedido_rechazado: 'Informe no habilitado',
+  admin_rechazado: 'Quiso entrar a algo de admin',
+  freno_ingreso: 'Ingreso frenado por intentos',
+  mail_pedido_error: 'No se pudo mandar el mail'
+};
+
+function pintarActividad() {
+  var d = ACT;
+  if (!d) { $('vActividad').innerHTML = '<div class="vacio">Sin datos.</div>'; return; }
+  var c = d.cuenta || {}, h = '';
+
+  // ---- elegir el período
+  h += '<div class="filtro-local" style="margin:4px 0 14px">' +
+    [[1, 'Hoy'], [7, '7 días'], [30, '30 días']].map(function (o) {
+      return '<button class="chip' + (ACT_DIAS === o[0] ? ' act' : '') +
+        '" onclick="verActividad(' + o[0] + ')">' + o[1] + '</button>';
+    }).join('') + '</div>';
+
+  // ---- el resumen
+  h += '<div class="act-res">' +
+    cuadroAct('Pedidos', c.total || 0, '') +
+    cuadroAct('Listos', c.listo || 0, 'ok') +
+    cuadroAct('Con error', c.error || 0, (c.error ? 'mal' : '')) +
+    cuadroAct('Esperando', c.pendiente || 0, (c.pendiente ? 'espera' : '')) +
+    '</div>';
+
+  // ---- las fallas primero: es lo que hay que mirar
+  var fallasPedidos = (d.pedidos || []).filter(function (p) { return p.estado === 'error'; });
+  h += '<div class="rubro">Fallas</div>';
+  if (!fallasPedidos.length && !(d.fallas || []).length) {
+    h += '<div class="pedido"><div class="ped-sub" style="margin:0">Sin fallas en el período. ' +
+      'Acá aparecen los pedidos que terminaron con error y los ingresos rechazados.</div></div>';
+  } else {
+    h += fallasPedidos.map(function (p) {
+      return '<div class="pedido"><div class="ped-top">' +
+        '<span class="ped-nom">' + esc(p.informe || '(sin nombre)') + '</span>' +
+        '<span class="badge b-error">Error</span></div>' +
+        '<div class="ped-sub">' + esc(p.nombre || p.email) + ' · ' + esc(fechaCorta(p.creado)) +
+        (p.detalle ? ' · ' + esc(p.detalle) : '') + '</div>' +
+        (p.mensaje ? '<div class="ped-msg">' + esc(p.mensaje) + '</div>' : '') +
+        '</div>';
+    }).join('');
+    h += (d.fallas || []).map(function (f) {
+      return '<div class="pedido"><div class="ped-top">' +
+        '<span class="ped-nom">' + esc(NOMBRE_FALLA[f.accion] || f.accion) + '</span>' +
+        '<span class="badge b-cancelado">Aviso</span></div>' +
+        '<div class="ped-sub">' + esc(f.email || '(sin mail)') + ' · ' + esc(fechaCorta(f.fecha)) + '</div>' +
+        (f.detalle ? '<div class="ped-msg">' + esc(f.detalle) + '</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  // ---- quién pidió cuánto
+  if ((d.gente || []).length) {
+    h += '<div class="rubro">Por persona</div><div class="pedido" style="padding:6px 15px">' +
+      d.gente.map(function (g) {
+        return '<div class="act-per"><span class="nom">' + esc(g.nombre || g.email) + '</span>' +
+          (g.error ? '<span class="badge b-error">' + g.error + ' con error</span>' : '') +
+          '<b>' + g.total + '</b></div>';
+      }).join('') + '</div>';
+  }
+
+  // ---- el detalle, lo más nuevo arriba
+  h += '<div class="rubro">Pedidos — del más nuevo al más viejo</div>';
+  if (!(d.pedidos || []).length) {
+    h += '<div class="vacio">Nadie pidió nada en el período.</div>';
+  } else {
+    h += d.pedidos.map(function (p) {
+      var dem = demoraTxt(p.demora);
+      return '<div class="pedido"><div class="ped-top">' +
+        '<span class="ped-nom">' + esc(p.informe || '(sin nombre)') + '</span>' +
+        '<span class="badge b-' + esc(p.estado || 'pendiente') + '">' +
+        esc((p.estado || 'pendiente').charAt(0).toUpperCase() + (p.estado || 'pendiente').slice(1)) +
+        '</span></div>' +
+        '<div class="ped-sub">' + esc(p.nombre || p.email) + ' · ' + esc(fechaCorta(p.creado)) +
+        (dem ? ' · tardó ' + esc(dem) : '') +
+        (p.detalle ? ' · ' + esc(p.detalle) : '') + '</div>' +
+        (p.estado === 'error' && p.mensaje ? '<div class="ped-msg">' + esc(p.mensaje) + '</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  $('vActividad').innerHTML = h;
+}
+
+function cuadroAct(lab, n, clase) {
+  return '<div class="act-caja ' + (clase ? 'act-' + clase : '') + '">' +
+    '<span class="n">' + n + '</span><span class="l">' + lab + '</span></div>';
 }
 
 // ---------------------------------------------------------------- archivos
