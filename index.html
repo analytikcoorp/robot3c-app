@@ -53,6 +53,11 @@
   /* overflow-x: clip y no hidden: hidden convierte al body en contenedor de scroll.
      El encabezado va con position:fixed y no sticky (03/11/2026): sticky depende de que
      ningún ancestro tenga overflow y en el Safari del celular no quedaba fijo. */
+  /* El navegador oculta lo que tiene [hidden] con display:none, pero cualquier regla
+     de autor que declare display le gana. Como "nav button" y ".cajon button" son
+     display:flex, el atributo hidden no ocultaba los botones de la barra ni del menú:
+     se veían aunque la persona no tuviera el permiso. Esta regla lo restituye. */
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: clip;
     font: 15px/1.45 "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   /* En iOS, la barra del navegador al aparecer y desaparecer despega los elementos
@@ -527,7 +532,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 3';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 4';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -627,7 +632,8 @@ function menuCuenta() {
           '<div class="acciones" style="margin-top:18px">' +
           '<button class="btn sec" onclick="cerrarHoja()">Cerrar</button>' +
           '<button class="btn sec" onclick="cerrarHoja();salir()">Cerrar sesión</button></div>' +
-          '<div class="ped-sub" style="margin-top:14px">Versión ' + esc(VERSION_APP) + '</div>';
+          '<div class="ped-sub" style="margin-top:14px">Versión ' + esc(VERSION_APP) +
+          ' · tableros: ' + esc((DATA.tableros || ['(no los manda el servidor)']).join(', ')) + '</div>';
   $('hoja').innerHTML = h;
   $('velo').style.display = 'block';
   requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
