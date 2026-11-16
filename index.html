@@ -508,6 +508,7 @@
      así ver() los sigue marcando como activos sin cambiarle nada. -->
 <aside class="cajon" id="cajon">
   <div class="cajon-tit">Menú</div>
+  <button id="tPrincipal" hidden onclick="irPrincipal()"><span class="i">🏠</span><span class="t">Principal</span></button>
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
   <button id="tTableroMas" hidden onclick="verTablero(true)"><span class="i">📈</span><span class="t">Más tableros</span></button>
@@ -526,7 +527,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 2';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 3';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -907,6 +908,7 @@ function acomodarTableros(d) {
   var tabs = d.tableros || ['hoy', 'dia', 'proy', 'mes', 'bancos'];
   var rapidos = tabs.some(function (v) { return TABS_RAPIDOS.indexOf(v) >= 0; });
   var otros = tabs.some(function (v) { return TABS_RAPIDOS.indexOf(v) < 0; });
+  $('tPrincipal').hidden = !d.hay_tablero || tabs.indexOf('dia') < 0;
   $('tTablero').hidden = !d.hay_tablero || !rapidos;
   $('tTableroMas').hidden = !d.hay_tablero || !otros;
 }
@@ -956,12 +958,18 @@ function verTablero(completo) {
   ver('tablero');
 }
 
+/** "Principal": el informe de ventas diarias (la réplica del PDF). Es la misma vista que
+ *  Tablero › Resumen de vta, pero con entrada propia arriba del menú, que es como se
+ *  entra todos los días. Aparece solo para quien tenga ese tablero habilitado. */
+function irPrincipal() { TAB_VISTA = 'dia'; verTablero(false); }
+
 /** Pinta la puerta por la que se entró. */
 function marcarTablero() {
   var dentro = !$('vTablero').hidden;
-  var b1 = $('tTablero'), b2 = $('tTableroMas');
+  var b1 = $('tTablero'), b2 = $('tTableroMas'), b0 = $('tPrincipal');
   if (b1) b1.className = (dentro && !TAB_COMPLETO) ? 'act' : '';
   if (b2) b2.className = (dentro && TAB_COMPLETO) ? 'act' : '';
+  if (b0) b0.className = (dentro && TAB_VISTA === 'dia') ? 'act' : '';
 }
 
 function ver(v) {
