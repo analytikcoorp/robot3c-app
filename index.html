@@ -534,8 +534,8 @@
 </main>
 
 <nav hidden id="barra">
+  <button id="tPrincipal" hidden onclick="irPrincipal()"><span class="i">🏠</span><span class="t">Principal</span></button>
   <button id="tTablero" hidden onclick="verTablero(false)"><span class="i">📈</span><span class="t">Tablero</span></button>
-  <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
   <button id="tPreguntar" hidden onclick="ver('preguntar')"><span class="i">💬</span><span class="t">Preguntar</span></button>
 </nav>
 
@@ -543,10 +543,10 @@
      así ver() los sigue marcando como activos sin cambiarle nada. -->
 <aside class="cajon" id="cajon">
   <div class="cajon-tit">Menú</div>
-  <button id="tPrincipal" hidden onclick="irPrincipal()"><span class="i">🏠</span><span class="t">Principal</span></button>
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
   <button id="tTableroMas" hidden onclick="verTablero(true)"><span class="i">📈</span><span class="t">Más tableros</span></button>
+  <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
   <button id="tComandos" hidden onclick="ver('comandos')"><span class="i">🤖</span><span class="t">Comandos</span></button>
   <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
   <div class="cajon-pie"><button class="btn sec" onclick="cerrarCajon();menuCuenta()">Mi cuenta</button></div>
@@ -562,7 +562,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 7';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 8';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -954,7 +954,7 @@ function acomodarTableros(d) {
 /** Si a esta persona no le toca ninguna de las pantallas de abajo, la barra se saca
  *  entera: una franja vacía al pie se ve como un error. Todo sigue a mano en el cajón. */
 function acomodarBarra() {
-  var hay = ['tTablero', 'tAuto', 'tPreguntar'].some(function (b) { return $(b) && !$(b).hidden; });
+  var hay = ['tPrincipal', 'tTablero', 'tPreguntar'].some(function (b) { return $(b) && !$(b).hidden; });
   $('barra').hidden = !hay;
   document.body.classList.toggle('sin-barra', !hay);
   medirCabecera();     // la altura de la barra define dónde termina el contenido
