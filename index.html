@@ -307,8 +307,22 @@
   .repl .totals-row .name{ font-weight:700; font-size:14px; }
   .repl .totals-row .figs{ display:flex; gap:18px; font-size:15px; }
   .repl .totals-row .figs .s1{ color:var(--r-s1); } .repl .totals-row .figs .s2{ color:var(--r-s2); }
-  .repl .tabla-ancha{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  .repl .tabla-ancha table.plain{ min-width:330px; }
+  /* Tablas densas: antes que partir un importe en dos renglones, la tabla se corre de
+     costado. La sombrita del borde avisa que hay más para ese lado y se apaga sola al
+     llegar al final (background-attachment: local), así no parece que falten datos. */
+  .repl .tabla-ancha{ overflow-x:auto; -webkit-overflow-scrolling:touch;
+    background:
+      linear-gradient(to right, var(--r-page) 30%, rgba(0,0,0,0)) left center,
+      linear-gradient(to left,  var(--r-page) 30%, rgba(0,0,0,0)) right center,
+      radial-gradient(farthest-side at 0 50%, rgba(24,36,48,.20), rgba(0,0,0,0)) left center,
+      radial-gradient(farthest-side at 100% 50%, rgba(24,36,48,.20), rgba(0,0,0,0)) right center;
+    background-repeat:no-repeat;
+    background-size:26px 100%, 26px 100%, 12px 100%, 12px 100%;
+    background-attachment:local, local, scroll, scroll; }
+  /* Un punto más chicas y con menos aire entre columnas: así la de canales entra entera en
+     el celular y no hay que correrla para ver la variación. */
+  .repl .tabla-ancha table.plain{ min-width:0; font-size:11.5px; }
+  .repl .tabla-ancha table.plain td{ padding-left:4px; }
   .repl table.plain{ width:100%; border-collapse:collapse; font-size:12.5px; }
   .repl table.plain th{ text-align:right; font-size:10.5px; font-weight:600; letter-spacing:.04em;
     text-transform:uppercase; color:var(--r-muted); padding:0 0 8px;
@@ -316,6 +330,10 @@
   .repl table.plain th:first-child, .repl table.plain td:first-child{ text-align:left; }
   .repl table.plain td{ padding:8px 0 8px 7px; border-bottom:1px solid var(--r-border);
     text-align:right; }
+  /* Los importes y las variaciones van enteros en un renglón; el nombre sí puede partirse.
+     Si la tabla no entra, el que se mueve es el envoltorio .tabla-ancha, no el número. */
+  .repl table.plain td.num, .repl table.plain td.up, .repl table.plain td.down,
+  .repl table.plain td.new{ white-space:nowrap; }
   .repl table.plain td.name{ font-weight:600; padding-left:0; }
   .repl table.plain td.up{ color:var(--r-good); font-weight:600; }
   .repl table.plain td.down{ color:var(--r-crit); font-weight:600; }
@@ -589,7 +607,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 10';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 11';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1474,14 +1492,17 @@ function cargarPanel() {
  *  y los mismos textos que el PDF que genera el informe diario. */
 var MESES_NOMBRE = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
                     'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-function pesos(n) {                         // "$ 8.190.890", como en el informe
+/* "$ 8.190.890", como en el informe. El espacio entre el signo y el número es un espacio
+   duro ( ): con el espacio común, en una celda angosta el renglón se cortaba ahí y el
+   "$" quedaba solo arriba del número. Pasaba en las dos tablas y también en las tarjetas. */
+function pesos(n) {
   var s = Math.round(Math.abs(n)).toString(), o = '';
   for (var i = 0; i < s.length; i++) {
     o += s.charAt(i);
     var f = s.length - 1 - i;
     if (f > 0 && f % 3 === 0) o += '.';
   }
-  return (n < 0 ? '-$ ' : '$ ') + o;
+  return (n < 0 ? '-$ ' : '$ ') + o;
 }
 function pc(a, b) { return ((a / b - 1) * 100).toFixed(1).replace('.', ','); }
 function flecha(a, b) { return (a >= b ? '▲ +' : '▼ ') + pc(a, b) + '%'; }
@@ -1600,7 +1621,8 @@ function pintarPanel(guardado, donde) {
   }).join('');
   h += '<section><div class="section-head"><h2>Mayorista y canales — acumulado del mes</h2>' +
     '<span class="note">vs. mismo período ' + bAnio + '</span></div>' +
-    '<table class="plain"><thead><tr><th>Canal</th><th>' + aAnio + '</th><th>' + bAnio +
+    '<div class="tabla-ancha"><table class="plain">' +
+    '<thead><tr><th>Canal</th><th>' + aAnio + '</th><th>' + bAnio +
     '</th><th>Var.</th></tr></thead><tbody>' + canales +
     '<tr class="total"><td class="name">Total mayorista</td><td class="num">' + pesos(p.mayorista.a) +
       '</td><td class="num">' + pesos(p.mayorista.b) + '</td><td class="num">' +
@@ -1611,7 +1633,7 @@ function pintarPanel(guardado, donde) {
     '<tr class="extra"><td class="name">Diferencia (cobrado − facturado)</td>' +
       '<td class="num ' + ((p.mayorista.dif || 0) < 0 ? 'diff-neg' : 'diff-pos') + '">' +
       pesos(p.mayorista.dif || 0) + '</td><td></td><td></td></tr>' +
-    '</tbody></table></section>';
+    '</tbody></table></div></section>';
 
   // ---- cobros de ayer
   var c = p.cobros || {};
