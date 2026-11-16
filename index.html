@@ -320,6 +320,35 @@
   .repl .cobros-total-row b{ font-size:17px; font-weight:700; color:var(--r-s2); white-space:nowrap; }
   .repl .pie{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px;
     font-size:11.5px; color:var(--r-muted); }
+  /* ---- Principal: las piezas de la hoja "Ventas diarias" del PDF, y nada más ---- */
+  /* En el PDF los dos acumulados van a la par. Eso entra recién en pantalla ancha: en el
+     celular, a la par, el número tendría que achicarse a 14px (más chico que el texto),
+     así que ahí van uno debajo del otro. El contenido es el mismo. */
+  .repl .pdf-duo{ display:grid; grid-template-columns:1fr; gap:12px; }
+  @media (min-width:560px){ .repl .pdf-duo{ grid-template-columns:repeat(2,1fr); gap:14px; } }
+  .repl .pdf-card{ background:var(--r-surface); border:1px solid var(--r-border);
+    border-radius:12px; padding:16px 18px; min-width:0; }
+  .repl .pdf-card .label{ font-size:11.5px; font-weight:700; letter-spacing:.07em;
+    text-transform:uppercase; color:var(--r-muted); }
+  .repl .pdf-card .value{ font-size:clamp(20px,5.4vw,26px); font-weight:800;
+    letter-spacing:-.01em; margin:8px 0 6px; }
+  .repl .pdf-card .delta{ font-size:13.5px; font-weight:700; }
+  .repl .pdf-card .delta.up{ color:var(--r-good); }
+  .repl .pdf-card .delta.down{ color:var(--r-crit); }
+  .repl .pdf-card .delta .prev{ color:var(--r-muted); font-weight:500; }
+  .repl .pdf-ayer h2{ font-size:17px; font-weight:700; margin:0; }
+  .repl .pdf-ayer .fecha{ font-size:12.5px; color:var(--r-muted); margin:4px 0 6px; }
+  .repl .pdf-row{ display:flex; align-items:baseline; justify-content:space-between;
+    gap:14px; padding:11px 0; font-size:15px; }
+  .repl .pdf-row + .pdf-row{ border-top:1px solid var(--r-border); }
+  .repl .pdf-row b{ font-weight:700; white-space:nowrap; }
+  .repl .pdf-row.tot{ border-top:2px solid var(--r-text); margin-top:3px; padding-top:13px; }
+  .repl .pdf-row.tot .name{ font-weight:700; }
+  .repl .pdf-row.tot b{ color:var(--r-s2); font-size:17px; }
+  .repl .pdf-cob{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .repl .pdf-cob .name{ font-weight:700; font-size:15px; }
+  .repl .pdf-cob b{ color:var(--r-s2); font-weight:800; white-space:nowrap;
+    font-size:clamp(19px,5.2vw,24px); }
   .rearmar { display: flex; justify-content: flex-end; margin: -4px 0 10px; }
   .rearmar button { border: 1px solid var(--line-fuerte); background: var(--card);
     color: var(--accent); border-radius: 999px; padding: 7px 14px; font-size: 12.5px;
@@ -533,7 +562,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 6';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 7';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -973,9 +1002,9 @@ function verTablero(completo) {
 function irPrincipal() { ver('principal'); cargarPrincipal(); }
 
 // ---------------------------------------------------------------- Principal (dashboard)
-// Los mismos datos del Informe de vtas diarias que replica la pestaña "Resumen de vta",
-// pero leídos como tablero: primero lo de ayer, después el acumulado del mes contra el
-// año pasado, y al final el detalle. La réplica literal del PDF no se toca.
+// Réplica literal de la hoja del PDF "Ventas diarias" que arma la notebook todas las
+// noches. Se dibuja con los mismos datos del panel que usa "Resumen de vta", pero
+// mostrando sólo lo que está en el PDF: nada agregado, nada reordenado.
 function cargarPrincipal() {
   if (!PANEL) {
     try {
@@ -999,9 +1028,70 @@ function cargarPrincipal() {
   });
 }
 
-/** Principal muestra la réplica del informe tal cual, la misma que Tablero › Resumen de
- *  vta: se dibuja con pintarPanel(), así las dos no se pueden separar nunca. */
-function pintarPrincipal(guardado) { pintarPanel(guardado, 'vPrincipal'); }
+/** Principal = la réplica literal del PDF "Ventas diarias": las mismas cinco piezas de la
+ *  hoja (encabezado, total general, los dos acumulados, lo de ayer y el total cobrado) y
+ *  nada más. Los cortes por sucursal, canales y cobros no están en el PDF, así que no van
+ *  acá: siguen enteros en Tablero › Resumen de vta, que se dibuja con pintarPanel(). */
+function pintarPrincipal(guardado) {
+  var p = PANEL;
+  if (!p) { $('vPrincipal').innerHTML = '<div class="vacio">Sin datos.</div>'; return; }
+  var dia = (p.al || '').split(' ')[0];
+  var rango = sinAnio(p.periodo).replace(' al ', '–');
+  var ayerMay = (p.ayer.general || 0) - (p.ayer.minorista || 0);
+  var h = '<div class="repl">';
+
+  // ---- encabezado: las tres líneas de arriba del PDF, sin chapitas ni texto extra
+  h += '<div class="masthead"><div>' +
+    '<p class="eyebrow">Informe diario de ventas</p>' +
+    '<h1>Ventas del ' + esc(enLetras(p.fecha)) + '</h1>' +
+    '<p class="sub">Acumulado ' + esc(rango) + ' vs. mismo período ' +
+      esc(anioDe(p.periodoAnt)) + '</p></div></div>';
+
+  // ---- total general acumulado (el recuadro azul)
+  h += '<div class="kpi-hero"><div>' +
+    '<p class="label">Total general acumulado</p>' +
+    '<div class="value num">' + pesos(p.general.a) + '</div>' +
+    '<div class="delta ' + (p.general.a >= p.general.b ? 'up' : 'down') + '">' +
+      flecha(p.general.a, p.general.b) + ' <span class="prev">vs ' + pesos(p.general.b) +
+      '</span></div></div></div>';
+
+  // ---- minorista y mayorista acumulados, uno al lado del otro
+  function acum(lab, x) {
+    var ok = x.a >= x.b;
+    return '<div class="pdf-card"><div class="label">' + lab + '</div>' +
+      '<div class="value num">' + pesos(x.a) + '</div>' +
+      '<div class="delta ' + (ok ? 'up' : 'down') + '">' +
+      (x.b ? (ok ? '+' : '') + pc(x.a, x.b) + '% <span class="prev">vs ' + pesos(x.b) + '</span>'
+           : '<span class="prev">Sin dato ' + esc(anioDe(p.periodoAnt)) + '</span>') +
+      '</div></div>';
+  }
+  h += '<div class="pdf-duo">' + acum('Minorista acum.', p.minorista) +
+       acum('Mayorista acum.', p.mayorista) + '</div>';
+
+  // ---- ventas de ayer
+  h += '<div class="pdf-card pdf-ayer"><h2>Ventas de ayer</h2>' +
+    '<div class="fecha">' + esc(p.fecha) + '</div>' +
+    '<div class="pdf-row"><span class="name">Minorista</span><b class="num">' +
+      pesos(p.ayer.minorista || 0) + '</b></div>' +
+    '<div class="pdf-row"><span class="name">Mayorista</span><b class="num">' +
+      pesos(ayerMay) + '</b></div>' +
+    '<div class="pdf-row tot"><span class="name">Total general</span><b class="num">' +
+      pesos(p.ayer.general || 0) + '</b></div></div>';
+
+  // ---- total cobrado del día
+  if (p.cobros && p.cobros.total) {
+    h += '<div class="pdf-card pdf-cob"><span class="name">Total cobrado del día ' +
+      '(Min. + May.)</span><b class="num">' + pesos(p.cobros.total) + '</b></div>';
+  }
+
+  h += '<div class="pie"><span>Fuente: exports del sistema de gestión, procesados y congelados el ' +
+    esc(dia) + ' · hoja "' + esc(String(p.fecha || '').replace(/\//g, '-')) +
+    '" del Informe de Ventas.</span></div></div>';
+
+  $('vPrincipal').innerHTML = avisoAtraso(p.fecha) + botonRearmar() +
+    (guardado ? '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste · ' +
+      'buscando novedades…</div>' : '') + h;
+}
 
 
 /** Pinta la puerta por la que se entró. */
