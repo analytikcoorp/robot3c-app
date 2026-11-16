@@ -58,29 +58,6 @@
      display:flex, el atributo hidden no ocultaba los botones de la barra ni del menú:
      se veían aunque la persona no tuviera el permiso. Esta regla lo restituye. */
   [hidden] { display: none !important; }
-  /* Principal: el tablero de ventas del informe diario */
-  .hero-r { color: var(--muted); font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
-    text-transform: uppercase; }
-  .hero-v { font-size: 30px; font-weight: 800; letter-spacing: -.02em; margin-top: 2px;
-    font-variant-numeric: tabular-nums; }
-  .kpi .d { font-size: 12px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .card-lista { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 12px; }
-  .comp + .comp { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-  .comp-top { display: flex; align-items: baseline; gap: 10px; }
-  .comp-n { flex: 1; font-weight: 700; min-width: 0; }
-  .comp-d { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .comp-v { display: flex; align-items: baseline; gap: 8px; margin-top: 1px;
-    font-variant-numeric: tabular-nums; }
-  .comp-v b { font-size: 14px; }
-  .comp-v span { color: var(--muted); font-size: 12.5px; }
-  .comp-bar { height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; margin-top: 4px; }
-  .comp-bar i { display: block; height: 100%; border-radius: 4px; }
-  .comp-bar i.hoy { background: var(--accent); }
-  .comp-bar i.antes { background: #9fb3c8; }
-  .leyenda i.c-hoy, .leyenda i.c-antes { display: inline-block; width: 10px; height: 10px;
-    border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
-  .leyenda i.c-hoy { background: var(--accent); }
-  .leyenda i.c-antes { background: #9fb3c8; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: clip;
     font: 15px/1.45 "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   /* En iOS, la barra del navegador al aparecer y desaparecer despega los elementos
@@ -556,7 +533,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 5';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 6';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1022,97 +999,9 @@ function cargarPrincipal() {
   });
 }
 
-/** Una fila comparada contra el año anterior, con barras proporcionales. */
-function filaComp(nombre, a, b, tope) {
-  var d = dif(a, b), cl = claseDif(a, b);
-  return '<div class="comp">' +
-    '<div class="comp-top"><span class="comp-n">' + esc(nombre) + '</span>' +
-      '<span class="comp-d ' + cl + '">' + d + '</span></div>' +
-    '<div class="comp-v"><b>' + guita(a) + '</b>' +
-      (b ? '<span>' + guita(b) + '</span>' : '<span>sin año anterior</span>') + '</div>' +
-    '<div class="comp-bar"><i class="hoy" style="width:' + (tope ? (a / tope * 100).toFixed(1) : 0) + '%"></i></div>' +
-    (b ? '<div class="comp-bar"><i class="antes" style="width:' + (tope ? (b / tope * 100).toFixed(1) : 0) + '%"></i></div>' : '') +
-  '</div>';
-}
-
-function pintarPrincipal(guardado) {
-  var P = PANEL, ay = P.ayer || {}, suc = ay.sucursales || [];
-  var h = '';
-  if (guardado) h += '<div class="ped-sub" style="margin:-2px 0 10px">Mostrando lo último que viste…</div>';
-
-  h += '<div class="tit-tablero">Ventas · informe del ' + esc(P.fecha || '') + '</div>' +
-       '<div class="ped-sub" style="margin:-6px 0 12px">' +
-         (P.al ? 'Datos al ' + esc(P.al) + ' · ' : '') + 'acumulado ' + esc(sinAnio(P.periodo || '')) + '</div>';
-
-  // --- lo de ayer
-  var mins = P.minorista || {}, mays = P.mayorista || {}, gen = P.general || {};
-  h += '<div class="hero"><div class="hero-r">Ventas de ayer (minorista)</div>' +
-       '<div class="hero-v">' + guita(ay.minorista || 0) + '</div></div>';
-
-  // --- acumulado del mes
-  h += '<div class="rubro">Acumulado del mes vs ' + esc(anioDe(P.periodoAnt || '')) + '</div>' +
-       '<div class="kpis">' +
-         kpiComp('Minorista', mins.a, mins.b) +
-         kpiComp('Mayorista', mays.a, mays.b) +
-         kpiComp('General', gen.a, gen.b) +
-       '</div>';
-
-  // --- ventas de ayer por sucursal
-  var conVta = suc.filter(function (s) { return s.v > 0; })
-                  .sort(function (x, y) { return y.v - x.v; });
-  if (conVta.length) {
-    var topAyer = conVta[0].v;
-    h += '<div class="rubro">Ayer por sucursal</div><div class="card-lista">' +
-      conVta.map(function (s) {
-        return '<div class="comp"><div class="comp-top">' +
-            '<span class="comp-n">' + esc(s.n) + '</span><span class="comp-d">' + guita(s.v) + '</span></div>' +
-          '<div class="ped-sub">' + (s.art || 0) + ' art. · ticket ' + guita(s.ticket || 0) + '</div>' +
-          '<div class="comp-bar"><i class="hoy" style="width:' + (s.v / topAyer * 100).toFixed(1) + '%"></i></div>' +
-        '</div>';
-      }).join('') + '</div>';
-  }
-
-  // --- acumulado por sucursal y por canal
-  [['Sucursales · acumulado del mes', P.sucursales || []],
-   ['Mayorista y canales · acumulado', P.canales || []]].forEach(function (par) {
-    var lista = (par[1] || []).slice().sort(function (x, y) { return y.a - x.a; });
-    if (!lista.length) return;
-    var tope = Math.max.apply(null, lista.map(function (s) { return Math.max(s.a, s.b || 0); }));
-    h += '<div class="rubro">' + par[0] + '</div><div class="card-lista">' +
-      lista.map(function (s) { return filaComp(s.n, s.a, s.b, tope); }).join('') +
-      '<div class="leyenda"><span><i class="c-hoy"></i>' + esc(sinAnio(P.periodo || '')) + '</span>' +
-      '<span><i class="c-antes"></i>' + esc(P.periodoAnt || '') + '</span></div></div>';
-  });
-
-  // --- cobros de ayer
-  var co = P.cobros || {}, lin = (co.minorista || []).concat(co.mayorista || []);
-  if (lin.length) {
-    h += '<div class="rubro">Cobros de ayer</div><div class="card-lista">' +
-      lin.map(function (c) {
-        return '<div class="comp-top"><span class="comp-n">' + esc(c.n) + '</span>' +
-               '<span class="comp-d">' + guita(c.v) + '</span></div>';
-      }).join('') +
-      (co.total ? '<div class="total-linea"><span>Total</span><b>' + guita(co.total) + '</b></div>' : '') +
-      '</div>';
-  }
-
-  // --- mayorista: lo facturado contra lo cobrado
-  if (mays.cobrado != null) {
-    h += '<div class="rubro">Mayorista del mes</div><div class="card-lista">' +
-      '<div class="comp-top"><span class="comp-n">Facturado</span><span class="comp-d">' + guita(mays.a) + '</span></div>' +
-      '<div class="comp-top"><span class="comp-n">Cobrado</span><span class="comp-d">' + guita(mays.cobrado) + '</span></div>' +
-      '<div class="total-linea"><span>Diferencia</span><b class="' + (mays.dif < 0 ? 'baja' : 'sube') + '">' +
-        guita(mays.dif || 0) + '</b></div></div>';
-  }
-
-  $('vPrincipal').innerHTML = h;
-}
-
-function kpiComp(rotulo, a, b) {
-  return '<div class="kpi"><div class="r">' + esc(rotulo) + '</div>' +
-    '<div class="v">' + corta(a || 0) + '</div>' +
-    '<div class="d ' + claseDif(a, b) + '">' + dif(a, b) + '</div></div>';
-}
+/** Principal muestra la réplica del informe tal cual, la misma que Tablero › Resumen de
+ *  vta: se dibuja con pintarPanel(), así las dos no se pueden separar nunca. */
+function pintarPrincipal(guardado) { pintarPanel(guardado, 'vPrincipal'); }
 
 
 /** Pinta la puerta por la que se entró. */
@@ -1494,9 +1383,10 @@ function avisoAtraso(fechaTxt) {
     ': el proceso de la notebook puede estar demorado.</div>';
 }
 
-function pintarPanel(guardado) {
+function pintarPanel(guardado, donde) {
+  var sec = donde || 'vTablero', tabs = sec === 'vTablero' ? tabsVista() : '';
   var p = PANEL;
-  if (!p) { $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Sin datos.</div>'; return; }
+  if (!p) { $(sec).innerHTML = tabs + '<div class="vacio">Sin datos.</div>'; return; }
   var dia = (p.al || '').split(' ')[0];
   var h = '<div class="repl">';
 
@@ -1650,7 +1540,7 @@ function pintarPanel(guardado) {
     esc(dia) + ' · hoja "' + esc(String(p.fecha || '').replace(/\//g, '-')) +
     '" del Informe de Ventas.</span></div></div>';
 
-  $('vTablero').innerHTML = tabsVista() + avisoAtraso(p.fecha) + botonRearmar() +
+  $(sec).innerHTML = tabs + avisoAtraso(p.fecha) + botonRearmar() +
     (guardado ? '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste · ' +
       'buscando novedades…</div>' : '') + h;
 }
