@@ -490,6 +490,7 @@
 <main hidden id="cuerpo">
   <div class="aviso" id="aviso"></div>
   <section id="vPedir"></section>
+  <section id="vComandos" hidden></section>
   <section id="vAuto" hidden></section>
   <section id="vTablero" hidden></section>
   <section id="vPreguntar" hidden></section>
@@ -510,6 +511,7 @@
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
   <button id="tTableroMas" hidden onclick="verTablero(true)"><span class="i">📈</span><span class="t">Más tableros</span></button>
+  <button id="tComandos" hidden onclick="ver('comandos')"><span class="i">🤖</span><span class="t">Comandos</span></button>
   <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
   <div class="cajon-pie"><button class="btn sec" onclick="cerrarCajon();menuCuenta()">Mi cuenta</button></div>
 </aside>
@@ -524,7 +526,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 2';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -833,20 +835,38 @@ function pintarEstado() {
   }
 }
 
+/** Lo del rubro Robot no es un informe: son órdenes para la notebook. Vive en Comandos. */
+function esComando(i) { return (i.rubro || '') === 'Robot'; }
+
+function botonInforme(i) {
+  return '<button class="inf' + (critico(i) ? ' critico' : '') + '" onclick="abrir(\'' + esc(i.clave) + '\')">' +
+    '<span class="ico">' + esc(i.dibujo || '📄') + '</span><span class="nom">' + esc(i.nombre) + '</span></button>';
+}
+
 function pintarInformes() {
   var porRubro = {}, orden = [];
-  DATA.informes.forEach(function (i) {
+  DATA.informes.filter(function (i) { return !esComando(i); }).forEach(function (i) {
     var r = i.rubro || 'Otros';
     if (!porRubro[r]) { porRubro[r] = []; orden.push(r); }
     porRubro[r].push(i);
   });
-  if (!orden.length) { $('vPedir').innerHTML = '<div class="vacio">Todavía no hay informes habilitados para vos.</div>'; return; }
-  $('vPedir').innerHTML = orden.map(function (r) {
-    return '<div class="rubro">' + esc(r) + '</div><div class="grilla">' + porRubro[r].map(function (i) {
-      return '<button class="inf' + (critico(i) ? ' critico' : '') + '" onclick="abrir(\'' + esc(i.clave) + '\')">' +
-        '<span class="ico">' + esc(i.dibujo || '📄') + '</span><span class="nom">' + esc(i.nombre) + '</span></button>';
-    }).join('') + '</div>';
-  }).join('');
+  $('vPedir').innerHTML = orden.length
+    ? orden.map(function (r) {
+        return '<div class="rubro">' + esc(r) + '</div><div class="grilla">' +
+               porRubro[r].map(botonInforme).join('') + '</div>';
+      }).join('')
+    : '<div class="vacio">Todavía no hay informes habilitados para vos.</div>';
+  pintarComandos();
+}
+
+function pintarComandos() {
+  var cs = DATA.informes.filter(esComando);
+  $('tComandos').hidden = !cs.length;
+  if (!cs.length) { $('vComandos').innerHTML = ''; return; }
+  // sin título de rubro: la pantalla ya se llama Comandos y son todos del mismo grupo
+  $('vComandos').innerHTML =
+    '<div class="ped-sub" style="margin:2px 0 12px">Órdenes para la notebook. No generan ningún informe.</div>' +
+    '<div class="grilla">' + cs.map(botonInforme).join('') + '</div>';
 }
 
 function pintarPedidos() {
@@ -878,7 +898,8 @@ function pintarPedidos() {
 
 var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: ['vTablero', 'tTablero'],
                preguntar: ['vPreguntar', 'tPreguntar'],
-               mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'] };
+               mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'],
+               comandos: ['vComandos', 'tComandos'] };
 /** Qué tableros ve esta persona: el completo va al cajón, y Hoy y Resumen de vta tienen
  *  atajo abajo, pero solo si los tiene habilitados. Un servidor viejo no manda la lista
  *  de tableros; en ese caso se asume que los tiene todos, como hace vistasMias(). */
