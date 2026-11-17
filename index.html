@@ -585,7 +585,8 @@
 
 <nav hidden id="barra">
   <button id="tPrincipal" hidden onclick="irPrincipal()"><span class="i">🏠</span><span class="t">Principal</span></button>
-  <button id="tTablero" hidden onclick="verTablero(false)"><span class="i">📈</span><span class="t">Tablero</span></button>
+  <button id="tVentas" hidden onclick="verGrupo('ventas')"><span class="i">📈</span><span class="t">Ventas</span></button>
+  <button id="tFinanzas" hidden onclick="verGrupo('finanzas')"><span class="i">🏦</span><span class="t">Finanzas</span></button>
   <button id="tPreguntar" hidden onclick="ver('preguntar')"><span class="i">💬</span><span class="t">Preguntar</span></button>
 </nav>
 
@@ -595,7 +596,7 @@
   <div class="cajon-tit">Menú</div>
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
-  <button id="tTableroMas" hidden onclick="verTablero(true)"><span class="i">📈</span><span class="t">Más tableros</span></button>
+  <button id="tTableroMas" hidden onclick="verGrupo('mas')"><span class="i">📊</span><span class="t">Más tableros</span></button>
   <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
   <button id="tComandos" hidden onclick="ver('comandos')"><span class="i">🤖</span><span class="t">Comandos</span></button>
   <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
@@ -613,7 +614,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 16';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 17';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -798,7 +799,7 @@ function pantallaDeArranque(d) {
   if (!elegido) return;
   if (elegido === 'dia') return irPrincipal();     // el tablero de ventas es la pantalla de inicio
   TAB_VISTA = elegido;
-  verTablero(noEsRapido(elegido));    // los que no son atajo abren el completo
+  verGrupo(grupoDe(elegido));         // cada tablero abre por la puerta de su grupo
 }
 
 /**
@@ -985,7 +986,7 @@ function pintarPedidos() {
   }).join('');
 }
 
-var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: ['vTablero', 'tTablero'],
+var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: ['vTablero', 'tVentas'],
                preguntar: ['vPreguntar', 'tPreguntar'],
                mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'],
                comandos: ['vComandos', 'tComandos'],
@@ -996,17 +997,22 @@ var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: [
  *  de tableros; en ese caso se asume que los tiene todos, como hace vistasMias(). */
 function acomodarTableros(d) {
   var tabs = d.tableros || ['hoy', 'dia', 'proy', 'mes', 'bancos'];
-  var rapidos = tabs.some(esRapido);
-  var otros = tabs.some(noEsRapido);
   $('tPrincipal').hidden = !d.hay_tablero || tabs.indexOf('dia') < 0;
-  $('tTablero').hidden = !d.hay_tablero || !rapidos;
-  $('tTableroMas').hidden = !d.hay_tablero || !otros;
+  GRUPOS_TAB.forEach(function (g) {
+    var b = $(g.boton);
+    if (b) {
+      b.hidden = !d.hay_tablero || !tabs.some(function (v) { return g.vistas.indexOf(v) >= 0; });
+    }
+  });
+  $('tTableroMas').hidden = !d.hay_tablero ||
+    !tabs.some(function (v) { return grupoDe(v) === 'mas'; });
 }
 
 /** Si a esta persona no le toca ninguna de las pantallas de abajo, la barra se saca
  *  entera: una franja vacía al pie se ve como un error. Todo sigue a mano en el cajón. */
 function acomodarBarra() {
-  var hay = ['tPrincipal', 'tTablero', 'tPreguntar'].some(function (b) { return $(b) && !$(b).hidden; });
+  var hay = ['tPrincipal', 'tVentas', 'tFinanzas', 'tPreguntar']
+    .some(function (b) { return $(b) && !$(b).hidden; });
   $('barra').hidden = !hay;
   document.body.classList.toggle('sin-barra', !hay);
   medirCabecera();     // la altura de la barra define dónde termina el contenido
@@ -1031,20 +1037,16 @@ function cerrarCajon() {
 function cerrarTodo() { cerrarCajon(); cerrarHoja(); }
 
 /**
- * Hay dos puertas al mismo tablero:
- *   - "Tablero", abajo: el del día a día, con Hoy y Resumen de vta nada más;
- *   - "Más tableros", en el cajón: las cuatro vistas, incluidas Proyección y Por local.
- * TAB_COMPLETO es la que decide cuántas sub-pestañas se dibujan.
+ * Hay tres puertas al mismo tablero, y cada una trae sus propias sub-pestañas:
+ *   - "Ventas", abajo: Hoy y Resumen de vta;
+ *   - "Finanzas", abajo: Bancos, MP y Cheques;
+ *   - "Más tableros", en el cajón: lo que no está en ninguno de los dos grupos.
+ * TAB_GRUPO es la que decide cuáles se dibujan.
  */
-function verTablero(completo) {
-  TAB_COMPLETO = !!completo;
+function verGrupo(g) {
+  TAB_GRUPO = g || 'ventas';
   var hay = vistasMias().map(function (v) { return v[0]; });
   if (hay.indexOf(TAB_VISTA) < 0) TAB_VISTA = hay[0] || 'hoy';
-  else if (completo && esRapido(TAB_VISTA)) {
-    // al entrar por el cajón se arranca en lo que no está en el atajo de abajo
-    var otros = hay.filter(noEsRapido);
-    if (otros.length) TAB_VISTA = otros[0];
-  }
   ver('tablero');
 }
 
@@ -1149,16 +1151,22 @@ function pintarPrincipal(guardado) {
 /** Pinta la puerta por la que se entró. */
 function marcarTablero() {
   var dentro = !$('vTablero').hidden;
-  var b1 = $('tTablero'), b2 = $('tTableroMas');
-  if (b1) b1.className = (dentro && !TAB_COMPLETO) ? 'act' : '';
-  if (b2) b2.className = (dentro && TAB_COMPLETO) ? 'act' : '';
+  GRUPOS_TAB.forEach(function (g) {
+    var b = $(g.boton);
+    if (b) b.className = (dentro && TAB_GRUPO === g.clave) ? 'act' : '';
+  });
+  var m = $('tTableroMas');
+  if (m) m.className = (dentro && TAB_GRUPO === 'mas') ? 'act' : '';
 }
 
 function ver(v) {
   cerrarCajon();
   for (var k in VISTAS) {
-    $(VISTAS[k][0]).hidden = k !== v;
-    $(VISTAS[k][1]).className = k === v ? 'act' : '';
+    // con red: si alguna vez falta un id, se pierde el marcado de ese botón pero no se
+    // cae la navegación entera por un TypeError
+    var sec = $(VISTAS[k][0]), bot = $(VISTAS[k][1]);
+    if (sec) sec.hidden = k !== v;
+    if (bot) bot.className = k === v ? 'act' : '';
   }
   marcarTablero();
   if (v === 'auto') cargarAutomaticos();
@@ -1382,10 +1390,30 @@ var PANEL = null, TAB_VISTA = 'hoy';           // arranca en 'hoy' (ventas de ho
  *  nombrar los rápidos, se nombran los dos que NO lo son. Así, cuando se agrega un tablero
  *  nuevo, aparece solo en el acceso directo y no hay que acordarse de anotarlo acá.
  *  Proyección y Por local se consultan de vez en cuando: siguen en "Más tableros". */
-var TABS_LENTOS = ['proy', 'mes'];
-function esRapido(v) { return TABS_LENTOS.indexOf(v) < 0; }
-function noEsRapido(v) { return TABS_LENTOS.indexOf(v) >= 0; }
-var TAB_COMPLETO = false;                      // true = se entró por "Más tableros" (las cuatro)
+/** Los grupos del acceso directo de abajo: un botón cada uno, con sus sub-pestañas.
+ *  Un tablero que no figure en ningún grupo cae en "Más tableros", el del cajón, que es
+ *  el cajón de sastre de lo que se mira de vez en cuando (hoy, Proyección y Por local).
+ *  Para que un tablero nuevo aparezca abajo hay que agregarlo al grupo que corresponda:
+ *  no se puede adivinar si es de ventas o de finanzas. */
+var GRUPOS_TAB = [
+  { clave: 'ventas',   boton: 'tVentas',   vistas: ['hoy', 'dia'] },
+  { clave: 'finanzas', boton: 'tFinanzas', vistas: ['bancos', 'mp', 'cheques'] }
+];
+var TAB_GRUPO = 'ventas';            // por qué puerta se entró: 'ventas', 'finanzas' o 'mas'
+
+function grupoDe(v) {
+  for (var i = 0; i < GRUPOS_TAB.length; i++) {
+    if (GRUPOS_TAB[i].vistas.indexOf(v) >= 0) return GRUPOS_TAB[i].clave;
+  }
+  return 'mas';
+}
+/** Las vistas de un grupo; null para 'mas', que es "todo lo que no está en un grupo". */
+function vistasDelGrupo(g) {
+  for (var i = 0; i < GRUPOS_TAB.length; i++) {
+    if (GRUPOS_TAB[i].clave === g) return GRUPOS_TAB[i].vistas;
+  }
+  return null;
+}
 
 function guita(n) {
   var s = Math.round(Math.abs(n)).toString();
@@ -1451,16 +1479,18 @@ function rearmarAhora() {
 var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Resumen de vta'], ['proy', 'Proyección'], ['mes', 'Por local'],
                   ['bancos', 'Bancos'], ['mp', 'MP'], ['cheques', 'Cheques']];
 /** Los tableros que esta persona puede ver (los decide el servidor; un servidor viejo no manda la lista). */
-/** Las sub-pestañas que le tocan a esta persona Y entran por la puerta que usó: el atajo
- *  de abajo muestra solo Hoy y Resumen de vta; "Más tableros" muestra las cuatro. */
+/** Las sub-pestañas que le tocan a esta persona Y entran por la puerta que usó: Ventas
+ *  muestra Hoy y Resumen de vta; Finanzas, Bancos, MP y Cheques; "Más tableros", el resto. */
 function vistasMias() {
   var ok = (DATA && DATA.tableros) || VISTAS_TAB.map(function (v) { return v[0]; });
   var tiene = VISTAS_TAB.filter(function (v) { return ok.indexOf(v[0]) >= 0; });
-  if (TAB_COMPLETO) return tiene;
-  var rapidas = tiene.filter(function (v) { return esRapido(v[0]); });
-  // si a esta persona no le toca ninguna de las rápidas, se le muestran las que tenga:
-  // mejor eso que una pantalla sin ninguna pestaña
-  return rapidas.length ? rapidas : tiene;
+  var del = vistasDelGrupo(TAB_GRUPO);
+  var mias = tiene.filter(del
+    ? function (v) { return del.indexOf(v[0]) >= 0; }
+    : function (v) { return grupoDe(v[0]) === 'mas'; });
+  // si por esa puerta no le toca ninguna, se le muestran las que tenga: mejor eso que
+  // una pantalla sin ninguna pestaña
+  return mias.length ? mias : tiene;
 }
 function tabsVista() {
   var mias = vistasMias();
