@@ -335,6 +335,9 @@
   .repl table.plain td.num, .repl table.plain td.up, .repl table.plain td.down,
   .repl table.plain td.new{ white-space:nowrap; }
   .repl table.plain td.name{ font-weight:600; padding-left:0; }
+  /* Referencia del color, para que el verde y el rojo de la columna Caja se entiendan. */
+  .repl .section-head .note .r-ok{ color:var(--r-good); font-weight:700; }
+  .repl .section-head .note .r-mal{ color:var(--r-crit); font-weight:700; }
   .repl table.plain td.up{ color:var(--r-good); font-weight:600; }
   .repl table.plain td.down{ color:var(--r-crit); font-weight:600; }
   .repl table.plain td.new{ color:var(--r-new); font-weight:600; font-size:11.5px; }
@@ -607,7 +610,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 11';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 12';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1664,9 +1667,11 @@ function pintarPanel(guardado, donde) {
   if (p.ayer.sucursales && p.ayer.sucursales.length) {
     var fa = p.ayer.sucursales.slice().sort(function (x, y) { return y.v - x.v; })
       .map(function (s) {
+        // La caja va solo con el importe: verde es sobrante, rojo es faltante. La referencia
+        // está arriba de la tabla, y el title lo dice en palabras al apoyar el dedo.
         var caja = !s.caja ? '<td class="num" style="color:var(--r-muted)">—</td>'
-          : '<td class="num ' + (s.caja > 0 ? 'up' : 'down') + '">' +
-            (s.caja > 0 ? 'Sobrante ' : 'Faltante ') + pesos(Math.abs(s.caja)) + '</td>';
+          : '<td class="num ' + (s.caja > 0 ? 'up' : 'down') + '" title="' +
+            (s.caja > 0 ? 'Sobrante' : 'Faltante') + '">' + pesos(Math.abs(s.caja)) + '</td>';
         return '<tr><td class="name">' + esc(s.n) + '</td>' +
           '<td class="num">' + pesos(s.v) + '</td>' +
           '<td class="num" style="color:var(--r-muted)">—</td>' +
@@ -1674,7 +1679,8 @@ function pintarPanel(guardado, donde) {
           '<td class="num">' + pesos(s.ticket) + '</td>' + caja + '</tr>';
       }).join('');
     h += '<section><div class="section-head"><h2>Ventas de ayer por sucursal</h2>' +
-      '<span class="note">' + esc(p.fecha) + ' · minorista · importes en $</span></div>' +
+      '<span class="note">' + esc(p.fecha) + ' · minorista · importes en $ · caja: ' +
+      '<b class="r-ok">sobrante</b> / <b class="r-mal">faltante</b></span></div>' +
       '<div class="tabla-ancha"><table class="plain"><thead><tr><th>Sucursal</th><th>Venta ' + esc(p.fecha) +
       '</th><th>Art. vend. hoy</th><th>Art. acum. mes</th><th>Ticket prom.</th><th>Caja</th>' +
       '</tr></thead><tbody>' + fa +
