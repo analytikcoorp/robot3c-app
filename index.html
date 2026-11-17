@@ -613,7 +613,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 15';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 16';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1449,7 +1449,7 @@ function rearmarAhora() {
 }
 
 var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Resumen de vta'], ['proy', 'Proyección'], ['mes', 'Por local'],
-                  ['bancos', 'Bancos'], ['mp', 'MP']];
+                  ['bancos', 'Bancos'], ['mp', 'MP'], ['cheques', 'Cheques']];
 /** Los tableros que esta persona puede ver (los decide el servidor; un servidor viejo no manda la lista). */
 /** Las sub-pestañas que le tocan a esta persona Y entran por la puerta que usó: el atajo
  *  de abajo muestra solo Hoy y Resumen de vta; "Más tableros" muestra las cuatro. */
@@ -1752,6 +1752,7 @@ function cargarTablero() {
   if (TAB_VISTA === 'hoy') return cargarHoy();
   if (TAB_VISTA === 'bancos') return cargarBancos();
   if (TAB_VISTA === 'mp') return cargarMp();
+  if (TAB_VISTA === 'cheques') return cargarCheques();
   if (!TAB) {
     try {
       var g = localStorage.getItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''));
@@ -1800,7 +1801,7 @@ var MEDIDOR_ALTO =
   'if(document.readyState==="complete")m();else addEventListener("load",m);' +
   'addEventListener("resize",m);setTimeout(m,400);setTimeout(m,1500);})();</scr' + 'ipt>';
 
-var IFRAMES_TAB = ['fMes', 'fBancos', 'fHoy', 'fMp'];
+var IFRAMES_TAB = ['fMes', 'fBancos', 'fHoy', 'fMp', 'fCheques'];
 
 /** Carga el HTML en el iframe con el medidor puesto. */
 function meterTablero(id, html) {
@@ -1941,6 +1942,43 @@ function pintarMp() {
   $('vTablero').innerHTML = tabsVista() +
     '<iframe id="fMp" class="tab-mes" sandbox="allow-scripts" title="Mercado Pago"></iframe>';
   meterTablero('fMp', MP_HTML.html);
+}
+
+// ---------------------------------------------------------------- cheques a ingresar (16/11/2026)
+// Lo que trae el PDF "Cheques a ingresar" que deja la tarea de las 18:30: cuánto está por
+// debitarse de las cuentas, cheque por cheque, los activos sin depositar y el resumen por
+// empresa. Lo arma la notebook (tablero_cheques.py) y se muestra acá en un iframe aislado.
+var CHQ_HTML = null;
+
+function cargarCheques() {
+  if (!CHQ_HTML) {
+    try {
+      var g = localStorage.getItem('tabchq_' + ((DATA.usuario && DATA.usuario.email) || ''));
+      if (g) CHQ_HTML = JSON.parse(g);
+    } catch (e) { /* sin guardado */ }
+  }
+  if (CHQ_HTML) pintarCheques();
+  else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero de cheques…</div>';
+  api('tablero_cheques').then(function (d) {
+    if (TAB_VISTA !== 'cheques') return;
+    if (!d.html) {
+      if (!CHQ_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el ' +
+        'tablero de cheques. Lo publica la notebook cuando sale el informe, a la tarde.</div>';
+      return;
+    }
+    var nuevo = !CHQ_HTML || CHQ_HTML.html !== d.html;
+    CHQ_HTML = { html: d.html, al: d.al || '' };
+    guardarLocal('tabchq_', CHQ_HTML);
+    if (nuevo) pintarCheques();
+  }).catch(function (e) {
+    if (!CHQ_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">' + esc(e.message || e) + '</div>';
+  });
+}
+
+function pintarCheques() {
+  $('vTablero').innerHTML = tabsVista() +
+    '<iframe id="fCheques" class="tab-mes" sandbox="allow-scripts" title="Cheques a ingresar"></iframe>';
+  meterTablero('fCheques', CHQ_HTML.html);
 }
 
 // ---------------------------------------------------------------- ventas de hoy (a pedido)
