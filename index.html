@@ -323,12 +323,9 @@
      el celular y no hay que correrla para ver la variación. */
   .repl .tabla-ancha table.plain{ min-width:0; font-size:11.5px; }
   .repl .tabla-ancha table.plain td{ padding-left:4px; }
-  /* En los celulares angostos hace falta un punto menos para que las dos tablas entren
-     sin cortar ningún importe. Mejor un número chico y entero que uno grande y cortado. */
-  @media (max-width:389px){
-    .repl .tabla-ancha table.plain{ font-size:10.5px; }
-    .repl .tabla-ancha table.plain td{ padding-left:3px; }
-    .repl .tabla-ancha table.plain th{ font-size:9.5px; } }
+  /* Un respiro al final, para que el último número no quede pegado al borde. */
+  .repl .tabla-ancha table.plain td:last-child,
+  .repl .tabla-ancha table.plain th:last-child{ padding-right:3px; }
   .repl table.plain{ width:100%; border-collapse:collapse; font-size:12.5px; }
   .repl table.plain th{ text-align:right; font-size:10.5px; font-weight:600; letter-spacing:.04em;
     text-transform:uppercase; color:var(--r-muted); padding:0 0 8px;
@@ -616,7 +613,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 13';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 14';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1703,7 +1700,49 @@ function pintarPanel(guardado, donde) {
   $(sec).innerHTML = tabs + avisoAtraso(p.fecha) + botonRearmar() +
     (guardado ? '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste · ' +
       'buscando novedades…</div>' : '') + h;
+  encajarTablas(sec);
 }
+
+/* Las tablas tienen que entrar enteras en el ancho que haya, y cuánto miden depende de la
+   tipografía que terminó usando el aparato: con Archivo (la de la app) son más anchas que
+   con la letra de respaldo. Por eso el tamaño no se puede calcular de antemano: se mide
+   acá, en la pantalla de la persona, y se achica lo justo hasta que entre.
+   Se vuelve a correr cuando termina de cargar la tipografía y al girar el teléfono. */
+function encajarTablas(donde) {
+  var sec = typeof donde === 'string' ? $(donde) : donde;
+  if (!sec) return;
+  var envs = sec.querySelectorAll('.tabla-ancha');
+  for (var i = 0; i < envs.length; i++) {
+    var env = envs[i], t = env.querySelector('table');
+    if (!t) continue;
+    t.style.fontSize = '';                                   // arrancar del tamaño del CSS
+    var hay = env.clientWidth;
+    if (!hay) {                     // la sección todavía no se ve: medir no sirve, se reintenta
+      setTimeout(function (s) { return function () { encajarTablas(s); }; }(sec), 80);
+      return;
+    }
+    var px = parseFloat(getComputedStyle(t).fontSize) || 11.5, piso = 8.5;
+    if (t.scrollWidth <= hay) continue;                      // ya entra
+    // primer tiro por regla de tres, y después unos pasos finos: el ancho no baja
+    // proporcional al tamaño porque los espacios entre columnas son fijos
+    px = Math.max(piso, px * hay / t.scrollWidth);
+    t.style.fontSize = px.toFixed(2) + 'px';
+    for (var v = 0; v < 8 && t.scrollWidth > hay && px > piso; v++) {
+      px = Math.max(piso, px - 0.25);
+      t.style.fontSize = px.toFixed(2) + 'px';
+    }
+  }
+}
+
+/** Reacomoda lo que esté a la vista: el tablero y la pantalla principal. */
+function encajarTodo() { encajarTablas('vTablero'); encajarTablas('vPrincipal'); }
+
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(encajarTodo);
+var TIMER_ENCAJE = null;
+window.addEventListener('resize', function () {
+  clearTimeout(TIMER_ENCAJE);
+  TIMER_ENCAJE = setTimeout(encajarTodo, 150);
+});
 
 function cargarTablero() {
   var mias = vistasMias().map(function (v) { return v[0]; });
