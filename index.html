@@ -323,6 +323,12 @@
      el celular y no hay que correrla para ver la variación. */
   .repl .tabla-ancha table.plain{ min-width:0; font-size:11.5px; }
   .repl .tabla-ancha table.plain td{ padding-left:4px; }
+  /* En los celulares angostos hace falta un punto menos para que las dos tablas entren
+     sin cortar ningún importe. Mejor un número chico y entero que uno grande y cortado. */
+  @media (max-width:389px){
+    .repl .tabla-ancha table.plain{ font-size:10.5px; }
+    .repl .tabla-ancha table.plain td{ padding-left:3px; }
+    .repl .tabla-ancha table.plain th{ font-size:9.5px; } }
   .repl table.plain{ width:100%; border-collapse:collapse; font-size:12.5px; }
   .repl table.plain th{ text-align:right; font-size:10.5px; font-weight:600; letter-spacing:.04em;
     text-transform:uppercase; color:var(--r-muted); padding:0 0 8px;
@@ -610,7 +616,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 12';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 13';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1616,7 +1622,9 @@ function pintarPanel(guardado, donde) {
 
   // ---- mayorista y canales
   var canales = p.canales.map(function (c) {
-    var v = !c.b ? '<td class="new">Sin dato ' + bAnio + '</td>'
+    // "Sin dato 2025" en la columna de variación le fijaba el ancho a toda la columna y
+    // empujaba los porcentajes fuera de la pantalla. Va un guión, y el texto en el title.
+    var v = !c.b ? '<td class="new" title="Sin dato de ' + bAnio + '">—</td>'
       : '<td class="' + (c.a >= c.b ? 'up' : 'down') + '">' + (c.a >= c.b ? '+' : '') +
         pc(c.a, c.b) + '%</td>';
     return '<tr><td class="name">' + esc(c.n) + '</td><td class="num">' + pesos(c.a) +
@@ -1674,7 +1682,6 @@ function pintarPanel(guardado, donde) {
             (s.caja > 0 ? 'Sobrante' : 'Faltante') + '">' + pesos(Math.abs(s.caja)) + '</td>';
         return '<tr><td class="name">' + esc(s.n) + '</td>' +
           '<td class="num">' + pesos(s.v) + '</td>' +
-          '<td class="num" style="color:var(--r-muted)">—</td>' +
           '<td class="num">' + s.art + '</td>' +
           '<td class="num">' + pesos(s.ticket) + '</td>' + caja + '</tr>';
       }).join('');
@@ -1682,10 +1689,10 @@ function pintarPanel(guardado, donde) {
       '<span class="note">' + esc(p.fecha) + ' · minorista · importes en $ · caja: ' +
       '<b class="r-ok">sobrante</b> / <b class="r-mal">faltante</b></span></div>' +
       '<div class="tabla-ancha"><table class="plain"><thead><tr><th>Sucursal</th><th>Venta ' + esc(p.fecha) +
-      '</th><th>Art. vend. hoy</th><th>Art. acum. mes</th><th>Ticket prom.</th><th>Caja</th>' +
+      '</th><th>Art. mes</th><th>Ticket prom.</th><th>Caja</th>' +
       '</tr></thead><tbody>' + fa +
       '<tr class="total"><td class="name">Total minorista</td><td class="num">' +
-      pesos(p.ayer.minorista || 0) + '</td><td></td><td></td><td></td><td></td></tr>' +
+      pesos(p.ayer.minorista || 0) + '</td><td></td><td></td><td></td></tr>' +
       '</tbody></table></div></section>';
   }
 
