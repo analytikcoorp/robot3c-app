@@ -587,6 +587,7 @@
   <button id="tPrincipal" hidden onclick="irPrincipal()"><span class="i">🏠</span><span class="t">Principal</span></button>
   <button id="tVentas" hidden onclick="verGrupo('ventas')"><span class="i">📈</span><span class="t">Ventas</span></button>
   <button id="tFinanzas" hidden onclick="verGrupo('finanzas')"><span class="i">🏦</span><span class="t">Finanzas</span></button>
+  <button id="tCtaCte" hidden onclick="verGrupo('ctacte')"><span class="i">🧾</span><span class="t">Cta Cte</span></button>
   <button id="tPreguntar" hidden onclick="ver('preguntar')"><span class="i">💬</span><span class="t">Preguntar</span></button>
 </nav>
 
@@ -614,7 +615,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 17';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-17 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1011,7 +1012,7 @@ function acomodarTableros(d) {
 /** Si a esta persona no le toca ninguna de las pantallas de abajo, la barra se saca
  *  entera: una franja vacía al pie se ve como un error. Todo sigue a mano en el cajón. */
 function acomodarBarra() {
-  var hay = ['tPrincipal', 'tVentas', 'tFinanzas', 'tPreguntar']
+  var hay = ['tPrincipal', 'tVentas', 'tFinanzas', 'tCtaCte', 'tPreguntar']
     .some(function (b) { return $(b) && !$(b).hidden; });
   $('barra').hidden = !hay;
   document.body.classList.toggle('sin-barra', !hay);
@@ -1397,7 +1398,8 @@ var PANEL = null, TAB_VISTA = 'hoy';           // arranca en 'hoy' (ventas de ho
  *  no se puede adivinar si es de ventas o de finanzas. */
 var GRUPOS_TAB = [
   { clave: 'ventas',   boton: 'tVentas',   vistas: ['hoy', 'dia'] },
-  { clave: 'finanzas', boton: 'tFinanzas', vistas: ['bancos', 'mp', 'cheques'] }
+  { clave: 'finanzas', boton: 'tFinanzas', vistas: ['bancos', 'mp', 'cheques'] },
+  { clave: 'ctacte',   boton: 'tCtaCte',   vistas: ['clientes', 'proveedores'] }
 ];
 var TAB_GRUPO = 'ventas';            // por qué puerta se entró: 'ventas', 'finanzas' o 'mas'
 
@@ -1477,7 +1479,8 @@ function rearmarAhora() {
 }
 
 var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Resumen de vta'], ['proy', 'Proyección'], ['mes', 'Por local'],
-                  ['bancos', 'Bancos'], ['mp', 'MP'], ['cheques', 'Cheques']];
+                  ['bancos', 'Bancos'], ['mp', 'MP'], ['cheques', 'Cheques'],
+                  ['clientes', 'Clientes'], ['proveedores', 'Proveedores']];
 /** Los tableros que esta persona puede ver (los decide el servidor; un servidor viejo no manda la lista). */
 /** Las sub-pestañas que le tocan a esta persona Y entran por la puerta que usó: Ventas
  *  muestra Hoy y Resumen de vta; Finanzas, Bancos, MP y Cheques; "Más tableros", el resto. */
@@ -1783,6 +1786,8 @@ function cargarTablero() {
   if (TAB_VISTA === 'bancos') return cargarBancos();
   if (TAB_VISTA === 'mp') return cargarMp();
   if (TAB_VISTA === 'cheques') return cargarCheques();
+  if (TAB_VISTA === 'clientes') return cargarTabClientes();
+  if (TAB_VISTA === 'proveedores') return cargarTabProveedores();
   if (!TAB) {
     try {
       var g = localStorage.getItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''));
@@ -2009,6 +2014,65 @@ function pintarCheques() {
   $('vTablero').innerHTML = tabsVista() +
     '<iframe id="fCheques" class="tab-mes" sandbox="allow-scripts" title="Cheques a ingresar"></iframe>';
   meterTablero('fCheques', CHQ_HTML.html);
+}
+
+// ---------------------------------------------------------------- cuenta corriente (17/11/2026)
+/* Clientes y Proveedores salen de las mismas fuentes que los botones del bot (la API de
+   saldos y el Excel de Acreedores), los arma la notebook y acá se muestran en un iframe.
+   Como ya son cinco tableros iguales en todo salvo el nombre, estos dos van por una sola
+   función en vez de repetir el bloque. Bancos, MP y Cheques podrían pasar por acá también;
+   se dejaron como estaban para no tocar algo que ya anda. */
+var HTML_TAB = {};        // clave -> { html, al } de lo último que se vio
+
+function cargarTableroHtml(clave, titulo, cuando) {
+  var guardado = HTML_TAB[clave];
+  if (!guardado) {
+    try {
+      var g = localStorage.getItem('tab_' + clave + '_' + ((DATA.usuario && DATA.usuario.email) || ''));
+      if (g) guardado = HTML_TAB[clave] = JSON.parse(g);
+    } catch (e) { /* sin guardado */ }
+  }
+  if (guardado) pintarTableroHtml(clave, titulo);
+  else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero…</div>';
+  api('tablero_' + clave).then(function (d) {
+    if (TAB_VISTA !== clave) return;
+    if (!d.html) {
+      if (!HTML_TAB[clave]) {
+        $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el tablero. ' +
+          esc(cuando) + '</div>';
+      }
+      return;
+    }
+    var nuevo = !HTML_TAB[clave] || HTML_TAB[clave].html !== d.html;
+    HTML_TAB[clave] = { html: d.html, al: d.al || '' };
+    guardarLocal('tab_' + clave + '_', HTML_TAB[clave]);
+    if (nuevo) pintarTableroHtml(clave, titulo);
+  }).catch(function (e) {
+    if (!HTML_TAB[clave]) {
+      $('vTablero').innerHTML = tabsVista() + '<div class="vacio">' + esc(e.message || e) + '</div>';
+    }
+  });
+}
+
+function pintarTableroHtml(clave, titulo) {
+  var id = 'fTab_' + clave;
+  if (IFRAMES_TAB.indexOf(id) < 0) IFRAMES_TAB.push(id);   // para que lo mida el medidor de alto
+  $('vTablero').innerHTML = tabsVista() +
+    '<iframe id="' + id + '" class="tab-mes" sandbox="allow-scripts" title="' + esc(titulo) + '"></iframe>';
+  meterTablero(id, HTML_TAB[clave].html);
+}
+
+/* Ojo con los nombres: ya existe un cargarClientes() que es el buscador de clientes de
+   la pantalla de consultas. Estos llevan "Tab" adelante para no pisarlo — la primera
+   versión lo pisó y se llevaba puestas las dos cosas sin tirar ningún error. */
+function cargarTabClientes() {
+  cargarTableroHtml('clientes', 'Saldos de clientes',
+    'Lo arma la notebook todas las noches con los saldos de 3C.');
+}
+
+function cargarTabProveedores() {
+  cargarTableroHtml('proveedores', 'Deuda con proveedores',
+    'Lo arma la notebook cuando el robot baja el listado de Acreedores.');
 }
 
 // ---------------------------------------------------------------- ventas de hoy (a pedido)
