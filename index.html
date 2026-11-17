@@ -613,7 +613,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-16 · 14';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-16 · 15';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1449,7 +1449,7 @@ function rearmarAhora() {
 }
 
 var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Resumen de vta'], ['proy', 'Proyección'], ['mes', 'Por local'],
-                  ['bancos', 'Bancos']];
+                  ['bancos', 'Bancos'], ['mp', 'MP']];
 /** Los tableros que esta persona puede ver (los decide el servidor; un servidor viejo no manda la lista). */
 /** Las sub-pestañas que le tocan a esta persona Y entran por la puerta que usó: el atajo
  *  de abajo muestra solo Hoy y Resumen de vta; "Más tableros" muestra las cuatro. */
@@ -1751,6 +1751,7 @@ function cargarTablero() {
   if (TAB_VISTA === 'mes') return cargarMes();
   if (TAB_VISTA === 'hoy') return cargarHoy();
   if (TAB_VISTA === 'bancos') return cargarBancos();
+  if (TAB_VISTA === 'mp') return cargarMp();
   if (!TAB) {
     try {
       var g = localStorage.getItem('tablero_' + ((DATA.usuario && DATA.usuario.email) || ''));
@@ -1799,7 +1800,7 @@ var MEDIDOR_ALTO =
   'if(document.readyState==="complete")m();else addEventListener("load",m);' +
   'addEventListener("resize",m);setTimeout(m,400);setTimeout(m,1500);})();</scr' + 'ipt>';
 
-var IFRAMES_TAB = ['fMes', 'fBancos', 'fHoy'];
+var IFRAMES_TAB = ['fMes', 'fBancos', 'fHoy', 'fMp'];
 
 /** Carga el HTML en el iframe con el medidor puesto. */
 function meterTablero(id, html) {
@@ -1901,6 +1902,45 @@ function pintarBancos() {
   $('vTablero').innerHTML = tabsVista() +
     '<iframe id="fBancos" class="tab-mes" sandbox="allow-scripts" title="Bancos"></iframe>';
   meterTablero('fBancos', BANCOS_HTML.html);
+}
+
+// ---------------------------------------------------------------- Mercado Pago (16/11/2026)
+// Lo que trae el PDF "Análisis de MP" de todas las mañanas: totales del mes, composición del
+// costo por empresa, resumen por empresa, costo por medio de pago y cuotas, costo por día y
+// comparación con el mes anterior. Lo arma la notebook leyendo ese PDF y lo publica sola;
+// acá se muestra tal cual, en un iframe aislado, igual que Bancos y Por local.
+var MP_HTML = null;
+
+function cargarMp() {
+  if (!MP_HTML) {
+    try {
+      var g = localStorage.getItem('tabmp_' + ((DATA.usuario && DATA.usuario.email) || ''));
+      if (g) MP_HTML = JSON.parse(g);
+    } catch (e) { /* sin guardado */ }
+  }
+  if (MP_HTML) pintarMp();
+  else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero de MP…</div>';
+  api('tablero_mp').then(function (d) {
+    if (TAB_VISTA !== 'mp') return;
+    if (!d.html) {
+      if (!MP_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el ' +
+        'tablero de Mercado Pago. Lo publica la notebook cuando sale el Análisis de MP, a la mañana.</div>';
+      return;
+    }
+    var nuevo = !MP_HTML || MP_HTML.html !== d.html;
+    MP_HTML = { html: d.html, al: d.al || '' };
+    guardarLocal('tabmp_', MP_HTML);
+    if (nuevo) pintarMp();
+  }).catch(function (e) {
+    if (!MP_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">' + esc(e.message || e) + '</div>';
+  });
+}
+
+function pintarMp() {
+  // sin aviso de atraso: el análisis sale los días hábiles y el período va adentro del tablero
+  $('vTablero').innerHTML = tabsVista() +
+    '<iframe id="fMp" class="tab-mes" sandbox="allow-scripts" title="Mercado Pago"></iframe>';
+  meterTablero('fMp', MP_HTML.html);
 }
 
 // ---------------------------------------------------------------- ventas de hoy (a pedido)
