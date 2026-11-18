@@ -8,5 +8,10 @@ var CONFIG = {
   servidor: 'https://script.google.com/macros/s/AKfycbx4utgxSlo1duTPtE6-G3Ice5wvgRStY4BIHUElAG6zf0IU0XpUzwSmi6_V_zxBF0yQNg/exec',
 
   // Google Cloud > Credenciales > ID de cliente de OAuth > Aplicación web
-  client_id: '968013683576-m1sfuhacn0oq57iekskhom9slidct1t6.apps.googleusercontent.com'
+  client_id: '968013683576-m1sfuhacn0oq57iekskhom9slidct1t6.apps.googleusercontent.com',
+
+  // Importaciones (Supabase). La clave publicable NO es secreta: lo que se puede ver o
+  // tocar lo decide la base según el rol de cada persona.
+  supabase_url: 'https://grxseblrkyrholsrqxbq.supabase.co',
+  supabase_key: 'sb_publishable_kAKG_LMB9cz_1sQjL4bsqw_UuKII2GC'
 };
