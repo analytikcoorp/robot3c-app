@@ -684,7 +684,7 @@ function iniciarGoogle() {
 }
 function conCredencial(resp) {
   $('loginErr').textContent = '';
-  IMP.login(resp.credential);      // misma identidad de Google para la base de Importaciones
+  if (window.IMP) IMP.login(resp.credential);      // misma identidad de Google para la base de Importaciones
   fetch(CONFIG.servidor, { method: 'POST', redirect: 'follow',
                            body: JSON.stringify({ accion: 'entrar', id_token: resp.credential }) })
     .then(function (r) { return r.json(); })
@@ -699,7 +699,7 @@ function conCredencial(resp) {
 function salir(msg) {
   SESION = null; clearTimeout(timer);
   try { localStorage.removeItem('sesion'); } catch (e) {}
-  IMP.salir();
+  if (window.IMP) IMP.salir();
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   $('login').style.display = 'flex';
   cerrarTodo();
@@ -784,7 +784,7 @@ function entrarApp(d) {
   $('tUsuarios').hidden = $('tActividad').hidden = d.usuario.rol !== 'admin';
   acomodarBarra();
   pintarEstado(); pintarInformes(); pintarPedidos(); programar();
-  IMP.iniciar();
+  if (window.IMP) IMP.iniciar();
   pantallaDeArranque(d);
   prepararAvisos(d.push, d.usuario.email);
 }
@@ -1182,7 +1182,7 @@ function ver(v) {
   if (v === 'preguntar') { pintarPreguntas(); cargarPreguntas(); }
   if (v === 'usuarios') cargarUsuarios();
   if (v === 'actividad') cargarActividad();
-  if (v === 'import') IMP.abrir();
+  if (v === 'import' && window.IMP) IMP.abrir();
   alPrincipio();
 }
 
