@@ -622,7 +622,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-19 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-20 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -2459,10 +2459,17 @@ var EJEMPLOS = ['¿Cuánto me debe Bustorf?', '¿Qué locales vendieron más est
                 '¿Cuánto vendimos ayer?', '¿Qué cheques tengo que ingresar esta semana?'];
 
 function pintarPreguntas() {
-  var h = '<div class="preg-caja">' +
-    '<textarea id="fPreg" rows="2" placeholder="Preguntá sobre ventas, clientes, saldos o stock…" ' +
-    'oninput="autoAlto(this)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();enviarPregunta();}"></textarea>' +
-    '<button class="btn" id="bPreg" onclick="enviarPregunta()">Preguntar</button></div>';
+  // El cuadro de escribir se arma UNA sola vez y después no se toca. Antes esta función
+  // rehacía toda la pantalla, y como las preguntas se refrescan cada 4 segundos mientras hay
+  // una sin responder, el texto a medio escribir se borraba solo cada pocos segundos.
+  if (!$('fPreg')) {
+    $('vPreguntar').innerHTML = '<div class="preg-caja">' +
+      '<textarea id="fPreg" rows="2" placeholder="Preguntá sobre ventas, clientes, saldos o stock…" ' +
+      'oninput="autoAlto(this)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();enviarPregunta();}"></textarea>' +
+      '<button class="btn" id="bPreg" onclick="enviarPregunta()">Preguntar</button></div>' +
+      '<div id="pregLista"></div>';
+  }
+  var h = '';
   if (!PREGS.length) {
     h += '<div class="rubro">Para probar</div><div class="chips">' +
       EJEMPLOS.map(function (e) {
@@ -2478,7 +2485,7 @@ function pintarPreguntas() {
     return '<div class="pedido"><div class="ped-top"><span class="ped-nom">' + esc(p.pregunta) + '</span>' +
       '<span class="arch-fecha">' + esc(fechaCorta(p.creado)) + '</span></div>' + cuerpo + '</div>';
   }).join('');
-  $('vPreguntar').innerHTML = h;
+  $('pregLista').innerHTML = h;
 }
 
 function autoAlto(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 150) + 'px'; }
@@ -2501,6 +2508,11 @@ function enviarPregunta() {
   var b = $('bPreg');
   b.disabled = true; b.textContent = 'Enviando…';
   api('preguntar', { pregunta: t }).then(function (d) {
+    // Antes el cuadro se limpiaba solo porque pintarPreguntas() rehacía toda la pantalla.
+    // Ahora el cuadro se conserva (para no pisar lo que se escribe), así que se limpia acá.
+    var c = $('fPreg');
+    if (c) { c.value = ''; c.style.height = ''; autoAlto(c); }
+    b.disabled = false; b.textContent = 'Preguntar';
     PREGS = d.preguntas; pintarPreguntas(); programarPreguntas();
     // le avisa al servidor que arranque ya; si contesta la notebook, no hace nada
     api('pensar').catch(function () {});
@@ -2920,9 +2932,22 @@ function repetir(id) {
 }
 
 if ('serviceWorker' in navigator) {
+  // Si la página arrancó SIN service worker (primera vez que se abre la app, o la primera
+  // después de publicar una versión), el que se instala toma el control a los pocos segundos
+  // y dispara controllerchange. Recargar ahí no sirve para nada —la página ya es la última
+  // publicada— y en cambio te saca de donde estabas o te borra lo que estabas escribiendo.
+  // Solo se recarga cuando ANTES había uno controlando, que es el caso real de versión nueva.
+  var habiaControlador = !!navigator.serviceWorker.controller;
   var recargando = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
-    if (recargando) return;                     // versión nueva lista: se carga sola
+    if (!habiaControlador || recargando) return;
+    // Aunque sea una versión nueva de verdad, no se recarga encima de alguien que está
+    // escribiendo: se espera a que suelte el campo.
+    var f = document.activeElement;
+    if (f && /^(TEXTAREA|INPUT)$/.test(f.tagName) && String(f.value || '').trim()) {
+      f.addEventListener('blur', function () { location.reload(); }, { once: true });
+      return;
+    }
     recargando = true;
     location.reload();
   });
