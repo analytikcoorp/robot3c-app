@@ -629,7 +629,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-20 · 6';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-20 · 7';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -2277,10 +2277,13 @@ function hoyEsDeHoy() {
 
 function pintarHoy() {
   var esperando = !!HOY_ESPERA;
+  // El sello con el puntito verde, justo arriba del tablero, ya dice cuándo se actualizó:
+  // repetirlo acá sobraba (pedido de Ana, 20/11/2026). Queda solo en el caso en que NO hay
+  // sello: cuando lo último que llegó no es de hoy, el tablero ni se dibuja y sin este
+  // renglón no se sabría de cuándo es. Con el tablero al día, la barra queda solo con el botón.
   var barra = '<div class="hoy-barra"><span>' +
-    (HOY_HTML && HOY_HTML.al ? (hoyEsDeHoy() ? 'Actualizado hoy a las ' + esc(HOY_HTML.al.slice(11)) :
-                                'Último: ' + esc(HOY_HTML.al) + ' (no es de hoy)')
-                             : 'Todavía no se pidió') + '</span>' +
+    (HOY_HTML && HOY_HTML.al && !hoyEsDeHoy()
+      ? 'Último: ' + esc(HOY_HTML.al) + ' (no es de hoy)' : '') + '</span>' +
     '<button onclick="actualizarHoy()"' + (esperando ? ' disabled' : '') + '>' +
     (esperando ? 'Actualizando… (un par de minutos)' : 'Actualizar ahora') + '</button></div>';
   var cuerpo = HOY_HTML && HOY_HTML.html && hoyEsDeHoy()
