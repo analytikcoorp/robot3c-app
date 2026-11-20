@@ -629,7 +629,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-20 · 4';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-20 · 5';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -1084,7 +1084,7 @@ function cerrarTodo() { cerrarCajon(); cerrarHoja(); }
 /**
  * Hay tres puertas al mismo tablero, y cada una trae sus propias sub-pestañas:
  *   - "Ventas", abajo: Hoy y Resumen de vta;
- *   - "Finanzas", abajo: Bancos, MP y Cheques;
+ *   - "Finanzas", abajo: Bancos, MP, Cheques a ingresar y Cheques emitidos;
  *   - "Más tableros", en el cajón: lo que no está en ninguno de los dos grupos.
  * TAB_GRUPO es la que decide cuáles se dibujan.
  */
@@ -1442,7 +1442,7 @@ var PANEL = null, TAB_VISTA = 'hoy';           // arranca en 'hoy' (ventas de ho
  *  no se puede adivinar si es de ventas o de finanzas. */
 var GRUPOS_TAB = [
   { clave: 'ventas',   boton: 'tVentas',   vistas: ['hoy', 'dia'] },
-  { clave: 'finanzas', boton: 'tFinanzas', vistas: ['bancos', 'mp', 'cheques'] },
+  { clave: 'finanzas', boton: 'tFinanzas', vistas: ['bancos', 'mp', 'cheques', 'emitidos'] },
   { clave: 'ctacte',   boton: 'tCtaCte',   vistas: ['clientes', 'proveedores'] }
 ];
 var TAB_GRUPO = 'ventas';            // por qué puerta se entró: 'ventas', 'finanzas' o 'mas'
@@ -1523,11 +1523,13 @@ function rearmarAhora() {
 }
 
 var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Resumen de vta'], ['proy', 'Proyección'], ['mes', 'Por local'],
-                  ['bancos', 'Bancos'], ['mp', 'MP'], ['cheques', 'Cheques'],
+                  ['bancos', 'Bancos'], ['mp', 'MP'], ['cheques', 'Cheques a ingresar'],
+                  ['emitidos', 'Cheques emitidos'],
                   ['clientes', 'Clientes'], ['proveedores', 'Proveedores']];
 /** Los tableros que esta persona puede ver (los decide el servidor; un servidor viejo no manda la lista). */
 /** Las sub-pestañas que le tocan a esta persona Y entran por la puerta que usó: Ventas
- *  muestra Hoy y Resumen de vta; Finanzas, Bancos, MP y Cheques; "Más tableros", el resto. */
+ *  muestra Hoy y Resumen de vta; Finanzas, Bancos, MP y los dos de cheques; "Más
+ *  tableros", el resto. */
 function vistasMias() {
   var ok = (DATA && DATA.tableros) || VISTAS_TAB.map(function (v) { return v[0]; });
   var tiene = VISTAS_TAB.filter(function (v) { return ok.indexOf(v[0]) >= 0; });
@@ -1830,6 +1832,7 @@ function cargarTablero() {
   if (TAB_VISTA === 'bancos') return cargarBancos();
   if (TAB_VISTA === 'mp') return cargarMp();
   if (TAB_VISTA === 'cheques') return cargarCheques();
+  if (TAB_VISTA === 'emitidos') return cargarTabEmitidos();
   if (TAB_VISTA === 'clientes') return cargarTabClientes();
   if (TAB_VISTA === 'proveedores') return cargarTabProveedores();
   if (!TAB) {
@@ -2182,6 +2185,14 @@ function pintarTableroHtml(clave, titulo) {
 function cargarTabClientes() {
   cargarTableroHtml('clientes', 'Saldos de clientes',
     'Lo arma la notebook todas las noches con los saldos de 3C.');
+}
+
+/* Cheques emitidos (20/11/2026): sale del mismo Informe Bancos, lo arma la notebook
+   (tablero_emitidos.py) con cinco solapas adentro del propio tablero. Acá no hace falta
+   nada propio: entra por la función genérica. */
+function cargarTabEmitidos() {
+  cargarTableroHtml('emitidos', 'Cheques emitidos',
+    'Lo arma la notebook con el Informe de Bancos de la mañana.');
 }
 
 function cargarTabProveedores() {
