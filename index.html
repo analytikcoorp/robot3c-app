@@ -515,6 +515,13 @@
   .preg-caja textarea { min-height: 44px; border: 0; background: none; padding: 8px 6px; resize: none; }
   .preg-caja textarea:focus { outline: none; }
   .preg-caja .btn { flex: none; }
+  /* una charla: varias idas y vueltas dentro de la misma tarjeta */
+  .pedido.charla { padding-bottom: 8px; }
+  .charla .vuelta + .vuelta { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .preg-pie { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+  .preg-pie.activo { color: var(--brand); font-weight: 600; }
+  .preg-seguir { margin: 8px 0 2px; font-size: 12.5px; color: var(--muted);
+                 display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .preg-resp { margin-top: 10px; font-size: 14.5px; white-space: pre-wrap; overflow-wrap: anywhere;
     border-top: 1px solid var(--line); padding-top: 10px; }
   .preg-resp.pensando { color: var(--muted); font-style: italic; border-top: 0; }
@@ -622,8 +629,9 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-20 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-20 · 2';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
+var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
@@ -2467,8 +2475,10 @@ function pintarPreguntas() {
       '<textarea id="fPreg" rows="2" placeholder="Preguntá sobre ventas, clientes, saldos o stock…" ' +
       'oninput="autoAlto(this)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();enviarPregunta();}"></textarea>' +
       '<button class="btn" id="bPreg" onclick="enviarPregunta()">Preguntar</button></div>' +
+      '<div class="preg-seguir" id="pregSeguir" hidden></div>' +
       '<div id="pregLista"></div>';
   }
+  pintarSeguir();
   var h = '';
   if (!PREGS.length) {
     h += '<div class="rubro">Para probar</div><div class="chips">' +
@@ -2476,17 +2486,51 @@ function pintarPreguntas() {
         return '<span class="chip" onclick="ponerPregunta(this)">' + esc(e) + '</span>';
       }).join('') + '</div>';
   }
-  h += PREGS.map(function (p) {
-    var cuerpo;
-    if (p.estado === 'listo') cuerpo = '<div class="preg-resp">' + esc(p.respuesta) + '</div>';
-    else if (p.estado === 'error') cuerpo = '<div class="preg-resp error">' + esc(p.respuesta ||
-      'No pude responder.') + '</div>';
-    else cuerpo = '<div class="preg-resp pensando">Pensando…</div>';
-    return '<div class="pedido"><div class="ped-top"><span class="ped-nom">' + esc(p.pregunta) + '</span>' +
-      '<span class="arch-fecha">' + esc(fechaCorta(p.creado)) + '</span></div>' + cuerpo + '</div>';
+  h += charlas().map(function (ch) {
+    var vueltas = ch.vueltas.map(function (p) {
+      var cuerpo;
+      if (p.estado === 'listo') cuerpo = '<div class="preg-resp">' + esc(p.respuesta) + '</div>';
+      else if (p.estado === 'error') cuerpo = '<div class="preg-resp error">' + esc(p.respuesta ||
+        'No pude responder.') + '</div>';
+      else cuerpo = '<div class="preg-resp pensando">Pensando…</div>';
+      return '<div class="vuelta"><div class="ped-top"><span class="ped-nom">' + esc(p.pregunta) + '</span>' +
+        '<span class="arch-fecha">' + esc(fechaCorta(p.creado)) + '</span></div>' + cuerpo + '</div>';
+    }).join('');
+    var pie = ch.hilo === HILO
+      ? '<div class="preg-pie activo">Lo que escribas sigue esta charla</div>'
+      : '<div class="preg-pie"><button class="chip" onclick="seguirCharla(\'' + esc(ch.hilo) +
+        '\')">Seguir esta charla</button></div>';
+    return '<div class="pedido charla">' + vueltas + pie + '</div>';
   }).join('');
   $('pregLista').innerHTML = h;
 }
+
+/** Las preguntas agrupadas por charla: la más nueva arriba, y adentro en orden de ida y vuelta.
+ *  PREGS viene de la más nueva a la más vieja; las preguntas viejas no tienen hilo y el
+ *  servidor les devuelve su propio id, así que cada una queda como una charla de una vuelta. */
+function charlas() {
+  var por = {}, orden = [];
+  PREGS.forEach(function (p) {
+    var k = p.hilo || p.id;
+    if (!por[k]) { por[k] = { hilo: k, vueltas: [] }; orden.push(por[k]); }
+    por[k].vueltas.unshift(p);           // dentro de la charla, de la más vieja a la más nueva
+  });
+  return orden;
+}
+
+function pintarSeguir() {
+  var e = $('pregSeguir');
+  if (!e) return;
+  var ch = HILO && charlas().filter(function (c) { return c.hilo === HILO; })[0];
+  if (!ch) { e.hidden = true; e.innerHTML = ''; return; }
+  e.hidden = false;
+  e.innerHTML = 'Seguís la charla de <b>' + esc(ch.vueltas[0].pregunta.slice(0, 40)) +
+    (ch.vueltas[0].pregunta.length > 40 ? '…' : '') + '</b>' +
+    ' <button class="chip" onclick="nuevaCharla()">Empezar una nueva</button>';
+}
+
+function seguirCharla(h) { HILO = h; pintarPreguntas(); if ($('fPreg')) $('fPreg').focus(); }
+function nuevaCharla() { HILO = ''; pintarPreguntas(); if ($('fPreg')) $('fPreg').focus(); }
 
 function autoAlto(t) { t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 150) + 'px'; }
 function ponerPregunta(c) { $('fPreg').value = c.textContent; $('fPreg').focus(); }
@@ -2507,7 +2551,9 @@ function enviarPregunta() {
   if (!t) return;
   var b = $('bPreg');
   b.disabled = true; b.textContent = 'Enviando…';
-  api('preguntar', { pregunta: t }).then(function (d) {
+  api('preguntar', { pregunta: t, hilo: HILO }).then(function (d) {
+    // La recién enviada es la primera de la lista: su hilo es el que sigue la charla.
+    HILO = (d.preguntas && d.preguntas[0] && d.preguntas[0].hilo) || HILO;
     // Antes el cuadro se limpiaba solo porque pintarPreguntas() rehacía toda la pantalla.
     // Ahora el cuadro se conserva (para no pisar lo que se escribe), así que se limpia acá.
     var c = $('fPreg');
@@ -2574,7 +2620,10 @@ function editarUsuario(n) {
        (n < 0 ? ' placeholder="persona@gmail.com"' : ' disabled') + '>';
   h += '<div class="chks"><label class="chk"><input type="checkbox" id="uAdmin"' + (p.rol === 'admin' ? ' checked' : '') +
        '>Administrador</label><label class="chk"><input type="checkbox" id="uActivo"' + (p.activo ? ' checked' : '') +
-       '>Puede entrar</label></div>';
+       '>Puede entrar</label><label class="chk"><input type="checkbox" id="uPreg"' + (p.preguntar ? ' checked' : '') +
+       '>Puede preguntar</label></div>' +
+       '<div class="ped-sub">"Puede preguntar" habilita la solapa Preguntar. Los administradores ' +
+       'la tienen siempre, tengan o no la casilla.</div>';
   h += '<div class="sub">Informes a pedido</div><div class="chks">' +
        '<label class="chk"><input type="checkbox" onclick="marcarTodo(this, \'ci\')">Todos</label></div>';
   orden.forEach(function (r) {
@@ -2621,6 +2670,7 @@ function guardarUsuario() {
     nombre: $('uNombre').value,
     rol: $('uAdmin').checked ? 'admin' : 'usuario',
     activo: $('uActivo').checked,
+    preguntar: $('uPreg').checked,
     informes: inf.length === USU.catalogo.length ? '*' : inf,
     automaticos: aut.length === USU.automaticos.length ? '*' : aut,
     carpetas: car.length === (USU.carpetas || []).length && car.length ? '*' : car,
