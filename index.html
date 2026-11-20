@@ -629,7 +629,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-20 · 3';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-20 · 4';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -646,6 +646,24 @@ function medirCabecera() {
 }
 window.addEventListener('resize', medirCabecera);
 window.addEventListener('orientationchange', function () { setTimeout(medirCabecera, 250); });
+// El contenido (main) está fijo entre --alto-cab y --alto-barra, y hasta acá esas dos medidas
+// solo se recalculaban con resize, orientationchange, al cargar las tipografías y al entrar.
+// Pero el encabezado y la barra cambian de alto sin que haya resize: el relleno de arriba
+// depende de env(safe-area-inset-top) (cambia en la app instalada y con la barra del navegador),
+// y la barra de abajo se esconde y se vuelve a mostrar al cambiar de pantalla. Cuando pasa eso,
+// la medida queda vieja y el contenido se ve corrido: tapado por el encabezado o con un hueco.
+// Mirando el tamaño real de los dos elementos se vuelve a medir solo, sin tener que acordarse
+// de llamarlo en cada lugar que los toca.
+// Se mira la caja de borde a propósito: lo que cambia es el relleno, y la caja de contenido
+// —la que mira por defecto— no se mueve con eso. Probado: con la caja de contenido el
+// desfase de 24 px seguía igual; con la caja de borde queda en 0.
+if (window.ResizeObserver) {
+  var obsAlto = new ResizeObserver(function () { medirCabecera(); });
+  ['cab', 'barra'].forEach(function (id) {
+    var e = $(id); if (!e) return;
+    try { obsAlto.observe(e, { box: 'border-box' }); } catch (x) { obsAlto.observe(e); }
+  });
+}
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(medirCabecera);
 
 function $(id) { return document.getElementById(id); }
