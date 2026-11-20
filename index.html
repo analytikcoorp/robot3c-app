@@ -420,6 +420,13 @@
   .hoy-barra button { border: 0; background: var(--brand); color: var(--brand-ink); border-radius: 10px;
                       padding: 9px 14px; font-weight: 700; font-size: 13.5px; cursor: pointer; }
   .hoy-barra button[disabled] { opacity: .6; cursor: default; }
+  /* cuándo llegó el tablero que se está viendo; "viejo" = de anteayer o antes */
+  .sello-tab { margin: 0 0 6px; font-size: 12.5px; color: var(--muted);
+               display: flex; align-items: center; gap: 6px; }
+  .sello-tab::before { content: ""; width: 7px; height: 7px; border-radius: 50%;
+                       background: #1d7f45; flex: none; }
+  .sello-tab.viejo { color: #a46200; font-weight: 600; }
+  .sello-tab.viejo::before { background: #a46200; }
   .tab-mes { display: block; width: 100%; height: calc(100dvh - 190px); min-height: 420px; border: 0;
              border-radius: 12px; background: #f4f6f9; }
   .cual-tab button.act { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
@@ -615,7 +622,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-17 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-19 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
 
@@ -1839,9 +1846,41 @@ var MEDIDOR_ALTO =
 var IFRAMES_TAB = ['fMes', 'fBancos', 'fHoy', 'fMp', 'fCheques'];
 
 /** Carga el HTML en el iframe con el medidor puesto. */
+// Cuándo recibió el servidor cada tablero. Lo anota él, no la notebook: el campo "al" que
+// manda cada tablero significa cosas distintas (en Bancos la fecha del informe, en Cheques el
+// texto de los listados), así que no sirve para saber si lo que se está viendo es de hoy.
+var PUBLICADO = {};
+var CLAVE_DE_IFRAME = { fMes: 'mes', fBancos: 'bancos', fMp: 'mp', fCheques: 'cheques', fHoy: 'hoy' };
+
+function _dmy(d) {
+  return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear();
+}
+
+function selloTexto(pub) {
+  if (!pub) return null;
+  var p = String(pub).split(' '), dia = p[0] || '', hora = p[1] || '';
+  var hoy = new Date(), ayer = new Date(hoy.getTime() - 86400000);
+  if (dia === _dmy(hoy)) return { txt: 'Actualizado hoy ' + hora, viejo: false };
+  // "Ayer" se muestra en tono normal a propósito: Cheques sale a la tarde y Bancos a media
+  // mañana, así que a primera hora lo normal es tener el de ayer. Se avisa de dos días.
+  if (dia === _dmy(ayer)) return { txt: 'Actualizado ayer ' + hora, viejo: false };
+  return { txt: 'Actualizado el ' + dia + ' ' + hora, viejo: true };
+}
+
+function ponerSello(f, id) {
+  var clave = CLAVE_DE_IFRAME[id] || (id.indexOf('fTab_') === 0 ? id.slice(5) : '');
+  var s = selloTexto(PUBLICADO[clave]);
+  if (!s) return;
+  var div = document.createElement('div');
+  div.className = 'sello-tab' + (s.viejo ? ' viejo' : '');
+  div.textContent = s.txt;
+  f.parentNode.insertBefore(div, f);
+}
+
 function meterTablero(id, html) {
   var f = $(id);
   if (!f) return;
+  ponerSello(f, id);
   f.style.height = ''; f.style.minHeight = '';   // hasta que el contenido diga el suyo, el del CSS
   f.srcdoc = html + MEDIDOR_ALTO;
 }
@@ -1881,6 +1920,7 @@ function cargarMes() {
   if (MES_HTML) pintarMes();
   else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero del mes…</div>';
   api('tablero_mes').then(function (d) {
+    PUBLICADO['mes'] = d.pub || PUBLICADO['mes'] || '';
     if (TAB_VISTA !== 'mes') return;
     if (!d.html) {
       if (!MES_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el ' +
@@ -1918,6 +1958,7 @@ function cargarBancos() {
   if (BANCOS_HTML) pintarBancos();
   else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero de bancos…</div>';
   api('tablero_bancos').then(function (d) {
+    PUBLICADO['bancos'] = d.pub || PUBLICADO['bancos'] || '';
     if (TAB_VISTA !== 'bancos') return;
     if (!d.html) {
       if (!BANCOS_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el ' +
@@ -1957,6 +1998,7 @@ function cargarMp() {
   if (MP_HTML) pintarMp();
   else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero de MP…</div>';
   api('tablero_mp').then(function (d) {
+    PUBLICADO['mp'] = d.pub || PUBLICADO['mp'] || '';
     if (TAB_VISTA !== 'mp') return;
     if (!d.html) {
       if (!MP_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el ' +
@@ -1983,7 +2025,7 @@ function pintarMp() {
 // Lo que trae el PDF "Cheques a ingresar" que deja la tarea de las 18:30: cuánto está por
 // debitarse de las cuentas, cheque por cheque, los activos sin depositar y el resumen por
 // empresa. Lo arma la notebook (tablero_cheques.py) y se muestra acá en un iframe aislado.
-var CHQ_HTML = null;
+var CHQ_HTML = null, CHQ_ESPERA = null;
 
 function cargarCheques() {
   if (!CHQ_HTML) {
@@ -1995,6 +2037,7 @@ function cargarCheques() {
   if (CHQ_HTML) pintarCheques();
   else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero de cheques…</div>';
   api('tablero_cheques').then(function (d) {
+    PUBLICADO['cheques'] = d.pub || PUBLICADO['cheques'] || '';
     if (TAB_VISTA !== 'cheques') return;
     if (!d.html) {
       if (!CHQ_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Todavía no llegó el ' +
@@ -2004,6 +2047,8 @@ function cargarCheques() {
     var nuevo = !CHQ_HTML || CHQ_HTML.html !== d.html;
     CHQ_HTML = { html: d.html, al: d.al || '' };
     guardarLocal('tabchq_', CHQ_HTML);
+    // Si cambió el tablero mientras se esperaba, el pedido ya se cumplió: vuelve el botón.
+    if (nuevo && CHQ_ESPERA && CHQ_ESPERA.html !== d.html) terminarEsperaCheques();
     if (nuevo) pintarCheques();
   }).catch(function (e) {
     if (!CHQ_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">' + esc(e.message || e) + '</div>';
@@ -2011,9 +2056,40 @@ function cargarCheques() {
 }
 
 function pintarCheques() {
-  $('vTablero').innerHTML = tabsVista() +
+  // El tablero se rearma solo cuando llega el PDF, pero el robot mira cada 10 minutos y solo
+  // de 7 a 22: este botón es para no esperar, o para pedirlo fuera de esa franja.
+  var barra = '<div class="hoy-barra"><span>' +
+    (CHQ_ESPERA ? 'Pedido al robot; en un momento aparece acá'
+                : 'Se actualiza solo cuando llega el PDF del banco') + '</span>' +
+    '<button onclick="actualizarCheques()"' + (CHQ_ESPERA ? ' disabled' : '') + '>' +
+    (CHQ_ESPERA ? 'Actualizando…' : 'Actualizar ahora') + '</button></div>';
+  $('vTablero').innerHTML = tabsVista() + barra +
     '<iframe id="fCheques" class="tab-mes" sandbox="allow-scripts" title="Cheques a ingresar"></iframe>';
   meterTablero('fCheques', CHQ_HTML.html);
+}
+
+function actualizarCheques() {
+  if (CHQ_ESPERA) return;
+  api('actualizar_tablero', { cual: 'cheques' }).then(function (d) {
+    if (d && d.pedidos) DATA.pedidos = d.pedidos;
+    CHQ_ESPERA = { html: CHQ_HTML ? CHQ_HTML.html : '', desde: Date.now() };
+    CHQ_ESPERA.t = setInterval(function () {
+      // Corta sola a los 5 minutos: rearmar este tablero es leer un PDF, no correr un informe
+      // en 3C, así que si a esa altura no llegó es que algo falló y el botón tiene que volver.
+      if (Date.now() - CHQ_ESPERA.desde > 5 * 60000) {
+        terminarEsperaCheques();
+        if (TAB_VISTA === 'cheques') pintarCheques();
+        return;
+      }
+      if (TAB_VISTA === 'cheques') cargarCheques();
+    }, 15000);
+    if (TAB_VISTA === 'cheques') pintarCheques();
+  }).catch(function (e) { toast(e.message || e); });
+}
+
+function terminarEsperaCheques() {
+  if (CHQ_ESPERA && CHQ_ESPERA.t) clearInterval(CHQ_ESPERA.t);
+  CHQ_ESPERA = null;
 }
 
 // ---------------------------------------------------------------- cuenta corriente (17/11/2026)
@@ -2035,6 +2111,7 @@ function cargarTableroHtml(clave, titulo, cuando) {
   if (guardado) pintarTableroHtml(clave, titulo);
   else $('vTablero').innerHTML = tabsVista() + '<div class="vacio">Buscando el tablero…</div>';
   api('tablero_' + clave).then(function (d) {
+    PUBLICADO[clave] = d.pub || PUBLICADO[clave] || '';
     if (TAB_VISTA !== clave) return;
     if (!d.html) {
       if (!HTML_TAB[clave]) {
@@ -2089,6 +2166,7 @@ function cargarHoy() {
   }
   pintarHoy();
   api('tablero_hoy').then(function (d) {
+    PUBLICADO['hoy'] = d.pub || PUBLICADO['hoy'] || '';
     if (TAB_VISTA !== 'hoy') return;
     if (!d.html) { if (!HOY_HTML) pintarHoy(); return; }
     var nuevo = !HOY_HTML || HOY_HTML.al !== d.al;
