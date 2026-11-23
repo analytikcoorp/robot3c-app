@@ -611,11 +611,11 @@
   <div class="cajon-tit">Menú</div>
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
-  <button id="tTableroMas" hidden onclick="verGrupo('mas')"><span class="i">📊</span><span class="t">Más tableros</span></button>
+  <button id="tTableroMas" hidden onclick="verGrupo('mas')"><span class="i">📊</span><span class="t">Tableros</span></button>
   <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
-  <button id="tComandos" hidden onclick="ver('comandos')"><span class="i">🤖</span><span class="t">Comandos</span></button>
-  <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
   <button id="tActividad" hidden onclick="ver('actividad')"><span class="i">📊</span><span class="t">Actividad</span></button>
+  <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
+  <button id="tComandos" hidden onclick="ver('comandos')"><span class="i">🤖</span><span class="t">Comandos</span></button>
   <div class="cajon-pie"><button class="btn sec" onclick="cerrarCajon();menuCuenta()">Mi cuenta</button></div>
 </aside>
 
@@ -629,7 +629,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-20 · 7';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-23 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -973,6 +973,12 @@ function pintarEstado() {
 /** Lo del rubro Robot no es un informe: son órdenes para la notebook. Vive en Comandos. */
 function esComando(i) { return (i.rubro || '') === 'Robot'; }
 
+/* El orden de los comandos lo fija la app, no el catálogo que manda la notebook: así se
+   cambia sin reiniciar el bot, y un comando nuevo que todavía no esté en esta lista cae al
+   final en vez de desaparecer. Van de lo más usado a lo más fuerte. */
+var ORDEN_COMANDOS = ['__cancelar', '__reiniciar', '__reiniciar_forzar', '__abrir_claude',
+                      '__reiniciar_pc', '__cancelar_reinicio'];
+
 function botonInforme(i) {
   return '<button class="inf' + (critico(i) ? ' critico' : '') + '" onclick="abrir(\'' + esc(i.clave) + '\')">' +
     '<span class="ico">' + esc(i.dibujo || '📄') + '</span><span class="nom">' + esc(i.nombre) + '</span></button>';
@@ -995,7 +1001,10 @@ function pintarInformes() {
 }
 
 function pintarComandos() {
-  var cs = DATA.informes.filter(esComando);
+  var cs = DATA.informes.filter(esComando).slice().sort(function (a, b) {
+    var ia = ORDEN_COMANDOS.indexOf(a.clave), ib = ORDEN_COMANDOS.indexOf(b.clave);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
   $('tComandos').hidden = !cs.length;
   if (!cs.length) { $('vComandos').innerHTML = ''; return; }
   // sin título de rubro: la pantalla ya se llama Comandos y son todos del mismo grupo
@@ -1049,8 +1058,9 @@ function acomodarTableros(d) {
       b.hidden = !d.hay_tablero || !tabs.some(function (v) { return g.vistas.indexOf(v) >= 0; });
     }
   });
+  // Se muestra si tiene cualquier tablero, porque ahora los lleva a todos.
   $('tTableroMas').hidden = !d.hay_tablero ||
-    !tabs.some(function (v) { return grupoDe(v) === 'mas'; });
+    !VISTAS_TAB.some(function (v) { return tabs.indexOf(v[0]) >= 0; });
 }
 
 /** Si a esta persona no le toca ninguna de las pantallas de abajo, la barra se saca
@@ -1085,7 +1095,7 @@ function cerrarTodo() { cerrarCajon(); cerrarHoja(); }
  * Hay tres puertas al mismo tablero, y cada una trae sus propias sub-pestañas:
  *   - "Ventas", abajo: Hoy y Resumen de vta;
  *   - "Finanzas", abajo: Bancos, MP, Cheques a ingresar y Cheques emitidos;
- *   - "Más tableros", en el cajón: lo que no está en ninguno de los dos grupos.
+ *   - "Tableros", en el cajón: todos los que tenga, sin filtrar.
  * TAB_GRUPO es la que decide cuáles se dibujan.
  */
 function verGrupo(g) {
@@ -1528,15 +1538,16 @@ var VISTAS_TAB = [['hoy', 'Hoy'], ['dia', 'Resumen de vta'], ['proy', 'Proyecci�
                   ['clientes', 'Clientes'], ['proveedores', 'Proveedores']];
 /** Los tableros que esta persona puede ver (los decide el servidor; un servidor viejo no manda la lista). */
 /** Las sub-pestañas que le tocan a esta persona Y entran por la puerta que usó: Ventas
- *  muestra Hoy y Resumen de vta; Finanzas, Bancos, MP y los dos de cheques; "Más
- *  tableros", el resto. */
+ *  muestra Hoy y Resumen de vta; Finanzas, Bancos, MP y los dos de cheques; "Tableros"
+ *  (el del cajón), todos. */
 function vistasMias() {
   var ok = (DATA && DATA.tableros) || VISTAS_TAB.map(function (v) { return v[0]; });
   var tiene = VISTAS_TAB.filter(function (v) { return ok.indexOf(v[0]) >= 0; });
   var del = vistasDelGrupo(TAB_GRUPO);
-  var mias = tiene.filter(del
-    ? function (v) { return del.indexOf(v[0]) >= 0; }
-    : function (v) { return grupoDe(v[0]) === 'mas'; });
+  // "Tableros", la entrada del cajón, ya no es "lo que sobra": muestra TODOS los tableros
+  // que tenga la persona (pedido de Ana, 23/11/2026). Las puertas de abajo —Ventas,
+  // Finanzas, Cta Cte— siguen siendo atajos a su propio subconjunto.
+  var mias = del ? tiene.filter(function (v) { return del.indexOf(v[0]) >= 0; }) : tiene;
   // si por esa puerta no le toca ninguna, se le muestran las que tenga: mejor eso que
   // una pantalla sin ninguna pestaña
   return mias.length ? mias : tiene;
