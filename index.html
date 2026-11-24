@@ -207,6 +207,14 @@
   .cajon button .t { flex: 1; }
   .cajon button.act { background: var(--accent-bg, rgba(31,61,92,.08)); color: var(--accent); }
   .cajon button .cont { position: static; display: none; }
+  /* Las categorías de Tableros, un escalón adentro: se ve que cuelgan de ahí. */
+  .cajon button .fl { color: var(--muted); font-size: 11px; }
+  .cajon button .fl::before { content: '\25B8'; }
+  .cajon button.abierto .fl::before { content: '\25BE'; }
+  /* una guía fina a la izquierda: se ve de un vistazo que cuelgan de Tableros */
+  #subTableros { border-left: 2px solid var(--line); margin: 2px 0 2px 26px; }
+  .cajon button.sub { padding-left: 20px; font-size: 14px; color: var(--muted); }
+  .cajon button.sub.act { background: var(--accent-bg, rgba(31,61,92,.08)); color: var(--accent); }
   .cajon-pie { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
   .cajon-pie .btn { width: 100%; justify-content: center; }
   .velo { position: fixed; inset: 0; background: rgba(10,15,25,.45); z-index: 9; display: none; }
@@ -619,7 +627,13 @@
   <div class="cajon-tit">Menú</div>
   <button id="tPedir" class="act" onclick="ver('pedir')"><span class="i">📋</span><span class="t">Pedir</span></button>
   <button id="tMios" onclick="ver('mios')"><span class="i">📥</span><span class="t">Mis informes</span><span class="cont" id="cont"></span></button>
-  <button id="tTableroMas" hidden onclick="verGrupo('mas')"><span class="i">📊</span><span class="t">Tableros</span></button>
+  <button id="tTableroMas" hidden onclick="desplegarTableros()"><span class="i">📊</span><span class="t">Tableros</span><span class="fl" id="flTableros"></span></button>
+  <div id="subTableros" hidden>
+    <button class="sub" id="sPrincipal" hidden onclick="irPrincipal()">Principal</button>
+    <button class="sub" id="sVentas"    hidden onclick="verGrupo('ventas')">Ventas</button>
+    <button class="sub" id="sFinanzas"  hidden onclick="verGrupo('finanzas')">Finanzas</button>
+    <button class="sub" id="sCtaCte"    hidden onclick="verGrupo('ctacte')">Cta Cte</button>
+  </div>
   <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
   <button id="tActividad" hidden onclick="ver('actividad')"><span class="i">📊</span><span class="t">Actividad</span></button>
   <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
@@ -637,7 +651,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-24 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-24 · 2';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -1066,9 +1080,16 @@ function acomodarTableros(d) {
       b.hidden = !d.hay_tablero || !tabs.some(function (v) { return g.vistas.indexOf(v) >= 0; });
     }
   });
-  // Se muestra si tiene cualquier tablero, porque ahora los lleva a todos.
-  $('tTableroMas').hidden = !d.hay_tablero ||
-    !VISTAS_TAB.some(function (v) { return tabs.indexOf(v[0]) >= 0; });
+  // Cada categoría del cajón aparece solo si la persona tiene alguno de sus tableros, y
+  // "Tableros" solo si le queda alguna categoría. Misma regla que los accesos de abajo.
+  var hayCat = !!$('tPrincipal') && !$('tPrincipal').hidden;
+  if ($('sPrincipal')) $('sPrincipal').hidden = !hayCat;
+  GRUPOS_TAB.forEach(function (g) {
+    var sb = $(g.sub), b = $(g.boton);
+    if (sb && b) { sb.hidden = b.hidden; if (!b.hidden) hayCat = true; }
+  });
+  $('tTableroMas').hidden = !hayCat;
+  if ($('tTableroMas').hidden) desplegarTableros(false);
 }
 
 /** Si a esta persona no le toca ninguna de las pantallas de abajo, la barra se saca
@@ -1211,6 +1232,18 @@ function pintarPrincipal(guardado) {
 }
 
 
+/* "Tableros" no lleva a ninguna pantalla: abre y cierra sus categorías. Es el criterio que
+   fijó Ana el 24/11/2026: todo tablero nuevo entra en una categoría, y las categorías se
+   despliegan acá. Así la lista no crece a lo ancho (la barra de pestañas se quedaba corta)
+   sino a lo largo, que es donde hay lugar. */
+function desplegarTableros(abrir) {
+  var b = $('tTableroMas'), c = $('subTableros');
+  if (!b || !c) return;
+  var queda = abrir === undefined ? c.hidden : !!abrir;
+  c.hidden = !queda;
+  b.classList.toggle('abierto', queda);
+}
+
 /** Pinta la puerta por la que se entró. */
 function marcarTablero() {
   var dentro = !$('vTablero').hidden;
@@ -1218,8 +1251,17 @@ function marcarTablero() {
     var b = $(g.boton);
     if (b) b.className = (dentro && TAB_GRUPO === g.clave) ? 'act' : '';
   });
+  // En el cajón se marca la categoría, no "Tableros": es la que dice dónde estás parado.
+  var enPrincipal = !$('vPrincipal').hidden;
+  GRUPOS_TAB.forEach(function (g) {
+    var sb = $(g.sub);
+    if (sb) sb.className = 'sub' + ((dentro && TAB_GRUPO === g.clave) ? ' act' : '');
+  });
+  var sp = $('sPrincipal');
+  if (sp) sp.className = 'sub' + (enPrincipal ? ' act' : '');
   var m = $('tTableroMas');
-  if (m) m.className = (dentro && TAB_GRUPO === 'mas') ? 'act' : '';
+  if (m) m.className = '';
+  if (dentro || enPrincipal) desplegarTableros(true);
 }
 
 function ver(v) {
@@ -1459,9 +1501,9 @@ var PANEL = null, TAB_VISTA = 'hoy';           // arranca en 'hoy' (ventas de ho
  *  Para que un tablero nuevo aparezca abajo hay que agregarlo al grupo que corresponda:
  *  no se puede adivinar si es de ventas o de finanzas. */
 var GRUPOS_TAB = [
-  { clave: 'ventas',   boton: 'tVentas',   vistas: ['hoy', 'dia'] },
-  { clave: 'finanzas', boton: 'tFinanzas', vistas: ['bancos', 'mp', 'cheques', 'emitidos'] },
-  { clave: 'ctacte',   boton: 'tCtaCte',   vistas: ['clientes', 'proveedores'] }
+  { clave: 'ventas',   boton: 'tVentas',   sub: 'sVentas',   vistas: ['hoy', 'dia', 'proy', 'mes'] },
+  { clave: 'finanzas', boton: 'tFinanzas', sub: 'sFinanzas', vistas: ['bancos', 'mp', 'cheques', 'emitidos'] },
+  { clave: 'ctacte',   boton: 'tCtaCte',   sub: 'sCtaCte',   vistas: ['clientes', 'proveedores'] }
 ];
 var TAB_GRUPO = 'ventas';            // por qué puerta se entró: 'ventas', 'finanzas' o 'mas'
 
