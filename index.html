@@ -652,7 +652,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-24 · 4';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-24 · 5';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -2098,7 +2098,7 @@ function cargarBancos() {
 
 function pintarBancos() {
   // sin aviso de atraso: el informe de bancos sale solo los días hábiles (la fecha va adentro)
-  $('vTablero').innerHTML = tabsVista() +
+  $('vTablero').innerHTML = tabsVista() + barraTablero('bancos') +
     '<iframe id="fBancos" class="tab-mes" sandbox="allow-scripts" title="Bancos"></iframe>';
   meterTablero('fBancos', BANCOS_HTML.html);
 }
@@ -2138,7 +2138,7 @@ function cargarMp() {
 
 function pintarMp() {
   // sin aviso de atraso: el análisis sale los días hábiles y el período va adentro del tablero
-  $('vTablero').innerHTML = tabsVista() +
+  $('vTablero').innerHTML = tabsVista() + barraTablero('mp') +
     '<iframe id="fMp" class="tab-mes" sandbox="allow-scripts" title="Mercado Pago"></iframe>';
   meterTablero('fMp', MP_HTML.html);
 }
@@ -2147,7 +2147,7 @@ function pintarMp() {
 // Lo que trae el PDF "Cheques a ingresar" que deja la tarea de las 18:30: cuánto está por
 // debitarse de las cuentas, cheque por cheque, los activos sin depositar y el resumen por
 // empresa. Lo arma la notebook (tablero_cheques.py) y se muestra acá en un iframe aislado.
-var CHQ_HTML = null, CHQ_ESPERA = null;
+var CHQ_HTML = null;
 
 function cargarCheques() {
   if (!CHQ_HTML) {
@@ -2170,7 +2170,7 @@ function cargarCheques() {
     CHQ_HTML = { html: d.html, al: d.al || '' };
     guardarLocal('tabchq_', CHQ_HTML);
     // Si cambió el tablero mientras se esperaba, el pedido ya se cumplió: vuelve el botón.
-    if (nuevo && CHQ_ESPERA && CHQ_ESPERA.html !== d.html) terminarEsperaCheques();
+    if (nuevo && ESPERA_TAB['cheques'] && ESPERA_TAB['cheques'].html !== d.html) terminarEsperaTab('cheques');
     if (nuevo) pintarCheques();
   }).catch(function (e) {
     if (!CHQ_HTML) $('vTablero').innerHTML = tabsVista() + '<div class="vacio">' + esc(e.message || e) + '</div>';
@@ -2179,39 +2179,11 @@ function cargarCheques() {
 
 function pintarCheques() {
   // El tablero se rearma solo cuando llega el PDF, pero el robot mira cada 10 minutos y solo
-  // de 7 a 22: este botón es para no esperar, o para pedirlo fuera de esa franja.
-  var barra = '<div class="hoy-barra"><span>' +
-    (CHQ_ESPERA ? 'Pedido al robot; en un momento aparece acá'
-                : 'Se actualiza solo cuando llega el PDF del banco') + '</span>' +
-    '<button onclick="actualizarCheques()"' + (CHQ_ESPERA ? ' disabled' : '') + '>' +
-    (CHQ_ESPERA ? 'Actualizando…' : 'Actualizar ahora') + '</button></div>';
-  $('vTablero').innerHTML = tabsVista() + barra +
+  // de 7 a 22: el botón es para no esperar, o para pedirlo fuera de esa franja. Desde el
+  // 24/11/2026 va por la barra común, igual que los otros nueve.
+  $('vTablero').innerHTML = tabsVista() + barraTablero('cheques') +
     '<iframe id="fCheques" class="tab-mes" sandbox="allow-scripts" title="Cheques a ingresar"></iframe>';
   meterTablero('fCheques', CHQ_HTML.html);
-}
-
-function actualizarCheques() {
-  if (CHQ_ESPERA) return;
-  api('actualizar_tablero', { cual: 'cheques' }).then(function (d) {
-    if (d && d.pedidos) DATA.pedidos = d.pedidos;
-    CHQ_ESPERA = { html: CHQ_HTML ? CHQ_HTML.html : '', desde: Date.now() };
-    CHQ_ESPERA.t = setInterval(function () {
-      // Corta sola a los 5 minutos: rearmar este tablero es leer un PDF, no correr un informe
-      // en 3C, así que si a esa altura no llegó es que algo falló y el botón tiene que volver.
-      if (Date.now() - CHQ_ESPERA.desde > 5 * 60000) {
-        terminarEsperaCheques();
-        if (TAB_VISTA === 'cheques') pintarCheques();
-        return;
-      }
-      if (TAB_VISTA === 'cheques') cargarCheques();
-    }, 15000);
-    if (TAB_VISTA === 'cheques') pintarCheques();
-  }).catch(function (e) { toast(e.message || e); });
-}
-
-function terminarEsperaCheques() {
-  if (CHQ_ESPERA && CHQ_ESPERA.t) clearInterval(CHQ_ESPERA.t);
-  CHQ_ESPERA = null;
 }
 
 // ---------------------------------------------------------------- cuenta corriente (17/11/2026)
@@ -2249,7 +2221,9 @@ function puedeActualizar(clave) {
   if (!c) return false;
   // El rol también vale: si la app se publica antes que el Code.gs nuevo, el servidor
   // todavía no manda puede_actualizar y el admin se quedaría sin botones.
-  return !c.pesado || !!(DATA.usuario && (DATA.usuario.puede_actualizar || DATA.usuario.rol === 'admin'));
+  // El servidor manda puede_actualizar al lado de usuario, no adentro: se miran los dos.
+  return !c.pesado || !!(DATA.puede_actualizar ||
+    (DATA.usuario && (DATA.usuario.puede_actualizar || DATA.usuario.rol === 'admin')));
 }
 
 /** El renglón de arriba de todo tablero: cuándo se actualizó, a la izquierda; el botón, a
