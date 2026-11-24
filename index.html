@@ -651,7 +651,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-24 · 2';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-24 · 3';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -1226,7 +1226,7 @@ function pintarPrincipal(guardado) {
     esc(dia) + ' · hoja "' + esc(String(p.fecha || '').replace(/\//g, '-')) +
     '" del Informe de Ventas.</span></div></div>';
 
-  $('vPrincipal').innerHTML = avisoAtraso(p.fecha) + botonRearmar() +
+  $('vPrincipal').innerHTML = selloHtml(p.al) + avisoAtraso(p.fecha) + botonRearmar() +
     (guardado ? '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste · ' +
       'buscando novedades…</div>' : '') + h;
 }
@@ -1851,7 +1851,7 @@ function pintarPanel(guardado, donde) {
     esc(dia) + ' · hoja "' + esc(String(p.fecha || '').replace(/\//g, '-')) +
     '" del Informe de Ventas.</span></div></div>';
 
-  $(sec).innerHTML = tabs + avisoAtraso(p.fecha) + botonRearmar() +
+  $(sec).innerHTML = tabs + selloHtml(p.al) + avisoAtraso(p.fecha) + botonRearmar() +
     (guardado ? '<div class="ped-sub" style="margin:-4px 0 10px">Mostrando lo último que viste · ' +
       'buscando novedades…</div>' : '') + h;
   encajarTablas(sec);
@@ -1980,6 +1980,15 @@ function selloTexto(pub) {
   // mañana, así que a primera hora lo normal es tener el de ayer. Se avisa de dos días.
   if (dia === _dmy(ayer)) return { txt: 'Actualizado ayer ' + hora, viejo: false };
   return { txt: 'Actualizado el ' + dia + ' ' + hora, viejo: true };
+}
+
+/* El mismo sello, pero para las pantallas que se dibujan acá y no vienen en un iframe:
+   Principal, Resumen de vta y Proyección. Criterio de Ana (24/11/2026): todos los tableros
+   muestran cuándo se actualizaron, con el mismo cartel y en el mismo lugar, arriba a la
+   izquierda. Las tres traen la fecha con hora en su campo "al". */
+function selloHtml(pub) {
+  var s = selloTexto(pub);
+  return s ? '<div class="sello-tab' + (s.viejo ? ' viejo' : '') + '">' + esc(s.txt) + '</div>' : '';
 }
 
 function ponerSello(f, id) {
@@ -2460,7 +2469,7 @@ function pintarTablero(guardado) {
       ' (proyectado ' + corta(proyMes) + ').') +
     ' · Libro al ' + esc(TAB.al) + (guardado ? ' · buscando novedades…' : '') + '</div>';
 
-  $('vTablero').innerHTML = tabsVista() + botonRearmar() + titulo + chips + filtro + pie + mandoPct() +
+  $('vTablero').innerHTML = tabsVista() + selloHtml(TAB.al) + botonRearmar() + titulo + chips + filtro + pie + mandoPct() +
     grafLocales(m) + kpis + tablaDias(m, corridos);
   // el mes elegido suele ser el último: centrarlo en la tira, sin tocar el scroll de la página
   var tira = $('vTablero').querySelector('.meses');
