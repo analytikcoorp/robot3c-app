@@ -404,11 +404,19 @@
   /* Las pestañas del tablero quedan fijas arriba mientras se scrollea. El que scrollea es
      main, así que sticky se agarra de ahí. El margin negativo le come el padding-top de la
      sección: sin eso quedaría una franja de fondo arriba al pegarse. */
+  /* Se desliza al costado cuando no entran todas. Antes era un flex sin scroll ni salto de
+     línea: con tres pestañas entraban justas y con la cuarta la fila se pasaba del ancho y
+     el sobrante quedaba RECORTADO por el overflow-x:hidden de main — la pestaña existía
+     pero no se veía ni se podía tocar. Lo vio Ana el 24/11/2026 con "Cheques emitidos".
+     flex: 1 0 auto es la clave: crecen para llenar el ancho cuando sobra lugar (se ve
+     igual que antes con dos o tres), y no se achican cuando falta, así la fila se desliza. */
   .cual-tab { display: flex; gap: 6px; position: sticky; top: 0; z-index: 3;
-    background: var(--bg); margin: -14px 0 12px; padding: 14px 0 10px; }
-  .cual-tab button { flex: 1; border: 1px solid var(--line-fuerte); background: var(--card);
-    color: var(--muted); border-radius: 10px; padding: 9px 6px; font-size: 13.5px; font-weight: 700;
-    cursor: pointer; }
+    background: var(--bg); margin: -14px 0 12px; padding: 14px 0 10px;
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .cual-tab::-webkit-scrollbar { display: none; }
+  .cual-tab button { flex: 1 0 auto; border: 1px solid var(--line-fuerte); background: var(--card);
+    color: var(--muted); border-radius: 10px; padding: 9px 12px; font-size: 13.5px; font-weight: 700;
+    cursor: pointer; white-space: nowrap; }
   .proy-fijar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: -4px 0 12px;
                 font-size: 12.5px; color: var(--muted); }
   .proy-fijar span { flex-basis: 100%; }
@@ -629,7 +637,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-23 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-24 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -1552,9 +1560,23 @@ function vistasMias() {
   // una pantalla sin ninguna pestaña
   return mias.length ? mias : tiene;
 }
+/* La activa puede quedar fuera de la parte visible de la fila (con diez tableros pasa
+   seguido). Esto la trae a la vista. Se agenda acá y no en cada lugar que dibuja, porque
+   todos llaman a tabsVista() justo antes de escribir el HTML: para cuando corre el cuadro
+   siguiente, la fila ya está en pantalla. */
+function verLaActiva() {
+  requestAnimationFrame(function () {
+    var f = document.querySelector('.cual-tab'), b = f && f.querySelector('button.act');
+    if (!b) return;
+    var izq = b.offsetLeft - (f.clientWidth - b.offsetWidth) / 2;
+    f.scrollTo({ left: Math.max(0, izq), behavior: 'smooth' });
+  });
+}
+
 function tabsVista() {
   var mias = vistasMias();
   if (mias.length < 2) return '';
+  verLaActiva();
   return '<div class="cual-tab">' + mias.map(function (v) {
     return '<button class="' + (TAB_VISTA === v[0] ? 'act' : '') + '" onclick="verVista(\'' + v[0] + '\')">' +
            v[1] + '</button>';
