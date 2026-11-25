@@ -579,6 +579,17 @@
     text-transform: uppercase; color: var(--accent-claro); }
   #login p { margin: 0; color: var(--muted); font-size: 14px; max-width: 320px; }
   #login .err { color: var(--bad); font-size: 14px; max-width: 340px; min-height: 20px; }
+
+  /* ------------------------------------------------------------- iOS: el zoom al tocar
+     un campo (25/11/2026). En iPhone, si el campo tiene menos de 16 px, Safari agranda
+     la pantalla solo al tocarlo —y en la app instalada no la vuelve a achicar nunca—:
+     la app queda más grande y corrida. No se arregla con el viewport (iOS ignora
+     maximum-scale y user-scalable desde hace años); la única forma es que los campos
+     midan 16 px. Va solo en pantallas táctiles, así que en la notebook no cambia nada.
+     Los tamaños de la app son 15 px: la diferencia no se nota, el zoom sí. */
+  @media (pointer: coarse) {
+    input, textarea, select, select.bq-sel, .preg-caja textarea { font-size: 16px; }
+  }
 </style>
 </head>
 <body>
@@ -652,7 +663,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-25 · 1';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-25 · 2';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -688,6 +699,23 @@ if (window.ResizeObserver) {
   });
 }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(medirCabecera);
+
+// Lo otro que corre la app en el celular es el teclado: aunque la página no scrollea
+// (body overflow:hidden), iOS la mueve igual para dejar ver el campo, y al cerrarse el
+// teclado no siempre la devuelve. Queda el encabezado tapado o con un hueco. Cuando no
+// hay ningún campo con el foco, se la vuelve a poner en su lugar y se mide de nuevo.
+document.addEventListener('focusout', function () {
+  setTimeout(function () {
+    var a = document.activeElement;
+    if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;   // saltó a otro campo
+    window.scrollTo(0, 0);
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+    medirCabecera();
+  }, 150);
+});
+// El teclado tampoco dispara "resize" de la ventana en iOS, pero sí cambia el viewport
+// visual: es el único aviso de que el hueco de la pantalla cambió.
+if (window.visualViewport) window.visualViewport.addEventListener('resize', medirCabecera);
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
