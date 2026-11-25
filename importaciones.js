@@ -52,11 +52,12 @@ var IMP = (function () {
     });
   }
 
-  function subir(ruta, bytes) {
+  var TIPO_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  function subir(ruta, bytes, tipo) {
     return acceso().then(function (tok) {
       return fetch(CONFIG.supabase_url + '/storage/v1/object/proformas/' + ruta, { method: 'POST',
         headers: { apikey: CONFIG.supabase_key, Authorization: 'Bearer ' + tok, 'x-upsert': 'false',
-                   'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, body: bytes });
+                   'Content-Type': tipo || TIPO_XLSX }, body: bytes });
     }).then(function (r) {
       if (r.ok) return;
       return r.json().then(function (e) { throw new Error(e.message || 'No pude subir el archivo'); });
@@ -235,21 +236,37 @@ var IMP = (function () {
   function nueva() {
     ALTA = null;
     $('vImport').innerHTML = '<h2 class="vt">Nueva operación</h2>' +
-      '<div class="ped-sub">Subí la proforma en Excel. Vas a revisar los datos antes de confirmar.</div>' +
-      '<input type="file" id="impArch" accept=".xlsx" onchange="IMP.leerArchivo(this)" style="margin-top:12px">' +
+      '<div class="ped-sub">Subí la proforma (Excel o PDF). Vas a revisar los datos antes de confirmar.</div>' +
+      '<input type="file" id="impArch" accept=".xlsx,.pdf" onchange="IMP.leerArchivo(this)" style="margin-top:12px">' +
       '<div class="ped-msg" id="impMsg"></div>' +
       '<div class="acciones" style="margin-top:12px"><button class="btn sec" onclick="IMP.abrir()">Volver</button></div>';
   }
+  function leerPdf(bytes) {
+    var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+        ruta = new Date().getFullYear() + '/' + id + '/proforma.pdf';
+    $('impMsg').textContent = 'Subiendo el PDF…';
+    return subir(ruta, bytes, 'application/pdf').then(function () {
+      $('impMsg').textContent = 'Leyendo el PDF con IA (puede tardar un minuto)…';
+      return acceso();
+    }).then(function (tok) {
+      return fetch(CONFIG.supabase_url + '/functions/v1/leer-proforma', { method: 'POST',
+        headers: { apikey: CONFIG.supabase_key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: ruta }) });
+    }).then(function (r) {
+      return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || 'No pude leer el PDF'); ALTA.ruta = ruta; return d; });
+    });
+  }
   function leerArchivo(inp) {
     var f = inp.files && inp.files[0]; if (!f) return;
+    var esPdf = /\.pdf$/i.test(f.name);
     $('impMsg').textContent = 'Leyendo la proforma…';
     Promise.all([f.arrayBuffer(), Promise.all([
       rest('importadores?select=id,nombre&activo=eq.true&order=nombre'), rest('proveedores?select=id,nombre&order=nombre'),
       rest('traders?select=id,nombre&order=nombre'),
       rest('despachantes?select=id,nombre,destinatarios,copia,envio_activo,asunto_plantilla,cuerpo_plantilla&order=nombre')])])
       .then(function (r) {
-        ALTA = { buf: new Uint8Array(r[0]), nombre: f.name, imp: r[1][0], prov: r[1][1], tr: r[1][2], desp: r[1][3] };
-        return Proforma.leerProforma(ALTA.buf);
+        ALTA = { buf: new Uint8Array(r[0]), nombre: f.name, tipo: esPdf ? 'pdf' : 'xlsx', imp: r[1][0], prov: r[1][1], tr: r[1][2], desp: r[1][3] };
+        return esPdf ? leerPdf(ALTA.buf) : Proforma.leerProforma(ALTA.buf);
       }).then(function (d) { ALTA.d = d; formulario(); })
       .catch(function (e) { $('impMsg').textContent = e.message || String(e); });
   }
@@ -269,6 +286,8 @@ var IMP = (function () {
     var d = ALTA.d, ds = ALTA.desp[0] || {};
     var h = '<h2 class="vt">Revisá la proforma</h2>' +
       '<div class="ped-sub">' + esc(ALTA.nombre) + '</div>' +
+      (ALTA.tipo === 'pdf' ? '<div class="ped-msg">⚠ Leído con IA: revisá bien cada dato y los productos antes de confirmar.</div>' : '') +
+      ((d.advertencias || []).length ? '<div class="ped-msg">' + d.advertencias.map(esc).join('<br>') + '</div>' : '') +
       '<div class="ped-msg">' + d.items.length + ' productos · ' + fmt(d.unidades) + ' unidades · total ' + fmt(d.total_calculado) + ' USD' +
       (d.coincide_total === true ? ' ✔ coincide con el total del documento' :
        d.coincide_total === false ? ' ⚠ el documento dice ' + fmt(d.total_documento) + ': revisalo' : '') + '</div>' +
@@ -277,6 +296,7 @@ var IMP = (function () {
       '<div class="sub">Trader (si hay)</div><select id="impTr">' + opciones(ALTA.tr, '', '', true) + '</select>' +
       campo('impProd', 'Producto', resumenProducto(d.items)) + campo('impPc', 'Puerto de carga', d.puerto_carga) +
       campo('impPd', 'Puerto de destino', d.puerto_destino) + campo('impPago', 'Forma de pago', d.pago) +
+      campo('impInc', 'Incoterm', d.incoterm) + campo('impMon', 'Moneda', d.moneda || 'USD') +
       campo('impFec', 'Fecha de la proforma (AAAA-MM-DD)', d.fecha) + campo('impCom', 'Comentario', '') +
       '<details style="margin-top:10px"><summary class="ped-sub">Ver los productos</summary>' + d.items.map(function (i) {
         return '<div class="ped-sub">' + i.linea + '. ' + esc(i.codigo) + ' · ' + esc(i.detalle) + ' — ' + fmt(i.cantidad) + ' × ' + fmt(i.precio_unit) + '</div>'; }).join('') + '</details>' +
@@ -292,7 +312,7 @@ var IMP = (function () {
       '<div class="ped-sub"><b>CC:</b> ' + esc((ds.copia || []).join(', ') || '—') + '</div>' +
       '<div class="ped-sub"><b>Asunto:</b> ' + esc(rellenar(ds.asunto_plantilla, v)) + '</div>' +
       '<div class="ped-sub" style="white-space:pre-wrap">' + esc(rellenar(ds.cuerpo_plantilla, v)) + '</div>' +
-      '<div class="ped-sub"><b>Adjunto:</b> proforma sin fotos + link a la original en Drive</div>' +
+      '<div class="ped-sub"><b>Adjunto:</b> ' + (ALTA.tipo === 'pdf' ? 'la proforma en PDF' : 'proforma sin fotos + link a la original en Drive') + '</div>' +
       '<div class="ped-msg">' + (ds.envio_activo ? 'Al confirmar, el mail sale solo.' : 'El envío está desactivado: NO se manda ningún mail. Se puede enviar después desde la ficha.') + '</div>';
   }
   function confirmar(btn) {
@@ -302,14 +322,16 @@ var IMP = (function () {
     btn.disabled = true; msg.textContent = 'Subiendo la proforma…';
     var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
         base = new Date().getFullYear() + '/' + id + '/', pOrig = base + 'proforma.xlsx', pLite = base + 'proforma-sin-fotos.xlsx';
-    Proforma.aliviar(ALTA.buf)
-      .then(function (lite) { return subir(pOrig, ALTA.buf).then(function () { return subir(pLite, lite); }); })
+    var subida = ALTA.tipo === 'pdf'
+      ? (pOrig = pLite = ALTA.ruta, Promise.resolve())          // el PDF ya se subió al leerlo
+      : Proforma.aliviar(ALTA.buf).then(function (lite) { return subir(pOrig, ALTA.buf).then(function () { return subir(pLite, lite); }); });
+    subida
       .then(function () {
         msg.textContent = 'Creando el pedido y la operación…';
         return rest('rpc/alta_operacion', { metodo: 'POST', cuerpo: { p: {
           importador_id: imp === '__nuevo' ? '' : imp, importador_nuevo: imp === '__nuevo' ? d.comprador : '',
           proveedor_id: prov === '__nuevo' ? '' : prov, proveedor_nuevo: prov === '__nuevo' ? d.vendedor : '',
-          trader_id: $('impTr').value, producto: $('impProd').value.trim(), forma_pago: $('impPago').value.trim(),
+          trader_id: $('impTr').value, incoterm: $('impInc').value.trim(), moneda: $('impMon').value.trim(), producto: $('impProd').value.trim(), forma_pago: $('impPago').value.trim(),
           puerto_carga: $('impPc').value.trim(), puerto_destino: $('impPd').value.trim(), fecha_proforma: $('impFec').value.trim(),
           comentario: $('impCom').value.trim(), despachante_id: ds.id, proforma_path: pOrig, proforma_liviana_path: pLite,
           enviar_mail: !!ds.envio_activo, items: d.items.map(function (i) {
