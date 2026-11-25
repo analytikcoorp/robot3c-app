@@ -500,6 +500,7 @@
   .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px;
     margin-right: 5px; vertical-align: -1px; }
   .filtro-local { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+  .chips .chip.act { background: var(--accent); color: #fff; border-color: var(--accent); }
   .filtro-local .chip { font-size: 13px; font-weight: 700; }
   .filtro-local .chip.act { background: var(--ok-bg); color: var(--ok); border-color: var(--ok);
     font-weight: 800; }
@@ -666,7 +667,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-25 · 3';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-25 · 4';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque

@@ -184,7 +184,7 @@ var IMP = (function () {
   function estado(id, estadoId) {
     rest('operaciones?id=eq.' + id, { metodo: 'PATCH', cuerpo: { estado_id: estadoId } })
       .then(function () {
-        rest('eventos', { metodo: 'POST', cuerpo: { operacion_id: id, evento: 'estado cambiado', usuario: ses && ses.uid } }).catch(function () {});
+        rest('eventos', { metodo: 'POST', cuerpo: { operacion_id: id, evento: 'estado cambiado', detalle: { estado_id: estadoId }, usuario: ses && ses.uid } }).catch(function () {});
         toast('Estado actualizado'); abrir();
       }).catch(function (e) { toast(e.message); });
   }
