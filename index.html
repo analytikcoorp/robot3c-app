@@ -228,7 +228,7 @@
   .peligro-box { background: var(--bad-bg); color: var(--bad); border-radius: 12px; padding: 10px 12px;
     font-size: 13.5px; margin: 0 0 12px; }
   label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 10px 0 5px; }
-  input, textarea { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  input, textarea, select.bq-sel { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
     border-radius: 10px; padding: 11px 12px; }
   textarea { min-height: 76px; resize: vertical; }
   .fila2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -652,11 +652,11 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-24 · 5';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-25 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
-var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes' u 'horarios' (admin)
+var TAB_AUTO = 'informes';     // sub-pestaña de Automáticos: 'informes', 'buscar' u 'horarios' (admin)
 
 // El encabezado es position:fixed, así que el contenido necesita saber cuánto mide para
 // no quedar tapado. Se mide de verdad (cambia con la muesca del celular y con la fuente).
@@ -954,7 +954,7 @@ function actualizar() {
     DATA.robot = d.robot; DATA.pedidos = d.pedidos; pintarEstado(); pintarPedidos(); programar();
   })];
   if (!$('vAuto').hidden) { tareas.push(api('automaticos', { fresco: 1 }).then(function (d) {
-    AUTOS = d.informes; pintarAutomaticos();
+    AUTOS = d.informes; if (TAB_AUTO === 'informes') pintarAutomaticos();
     try { localStorage.setItem(claveAutos(), JSON.stringify(AUTOS)); } catch (e) { /* no es grave */ }
   })); }
   if (!$('vPreguntar').hidden) tareas.push(api('preguntas').then(function (d) {
@@ -1295,6 +1295,7 @@ function claveAutos() {
 }
 function cargarAutomaticos() {
   if (TAB_AUTO === 'horarios' && DATA.hay_tareas) return cargarTareas();
+  if (TAB_AUTO === 'buscar') return pintarBuscar();
   // Pedirle la lista al servidor tarda (recorre las carpetas de Drive). Mientras tanto se
   // muestra lo último que se vio, guardado en el celular, y cuando llega lo nuevo se
   // repinta. Así la pantalla abre al toque en vez de quedar en blanco. (03/11/2026)
@@ -1309,8 +1310,9 @@ function cargarAutomaticos() {
   api('automaticos').then(function (d) {
     AUTOS = d.informes;
     try { localStorage.setItem(claveAutos(), JSON.stringify(AUTOS)); } catch (e) { /* no es grave */ }
-    pintarAutomaticos();
+    if (TAB_AUTO === 'informes') pintarAutomaticos();   // si ya pasó a Buscar, no la pisa
   }).catch(function (e) {
+    if (TAB_AUTO !== 'informes') return;
     if (!(AUTOS && AUTOS.length)) {
       $('vAuto').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>';
     }
@@ -1328,11 +1330,100 @@ var TAREAS = null;
 function claveTareas() { return 'tareas_' + ((DATA.usuario && DATA.usuario.email) || ''); }
 
 function tabsAuto() {
-  if (!DATA.hay_tareas) return '';
   return '<div class="cual-tab">' +
     '<button class="' + (TAB_AUTO === 'informes' ? 'act' : '') + '" onclick="verAuto(\'informes\')">Informes</button>' +
-    '<button class="' + (TAB_AUTO === 'horarios' ? 'act' : '') + '" onclick="verAuto(\'horarios\')">Horarios</button>' +
+    '<button class="' + (TAB_AUTO === 'buscar' ? 'act' : '') + '" onclick="verAuto(\'buscar\')">Buscar</button>' +
+    (DATA.hay_tareas ? '<button class="' + (TAB_AUTO === 'horarios' ? 'act' : '') + '" onclick="verAuto(\'horarios\')">Horarios</button>' : '') +
     '</div>';
+}
+
+// ---------------------------------------------------------------- buscar (25/11/2026)
+// Los informes automáticos de un día, aunque ya no estén entre los últimos de la lista.
+// Se elige el informe (o todos) y la fecha; el servidor busca en la carpeta de cada uno.
+var BUSQ = { clave: '', fecha: '', res: null, cargando: false };
+
+function pintarBuscar() {
+  if (!AUTOS) {
+    try { var g = localStorage.getItem(claveAutos()); if (g) AUTOS = JSON.parse(g); } catch (e) { /* sigue */ }
+  }
+  if (!AUTOS) {
+    $('vAuto').innerHTML = tabsAuto() + '<div class="vacio">Cargando la lista de informes…</div>';
+    api('automaticos').then(function (d) {
+      AUTOS = d.informes;
+      try { localStorage.setItem(claveAutos(), JSON.stringify(AUTOS)); } catch (e) { /* no es grave */ }
+      if (TAB_AUTO === 'buscar') pintarBuscar();
+    }).catch(function (e) { $('vAuto').innerHTML = tabsAuto() + '<div class="vacio">' + esc(e.message || e) + '</div>'; });
+    return;
+  }
+  if (!BUSQ.fecha) BUSQ.fecha = iso(new Date(Date.now() - 86400000));
+  var opciones = '<option value="">Todos los informes</option>' + AUTOS.map(function (a) {
+    return '<option value="' + esc(a.clave) + '"' + (a.clave === BUSQ.clave ? ' selected' : '') + '>' +
+      esc((a.dibujo || '📄') + ' ' + a.nombre) + '</option>';
+  }).join('');
+  $('vAuto').innerHTML = tabsAuto() +
+    '<div class="pedido"><label style="margin-top:0">Informe</label>' +
+    '<select id="bqInf" class="bq-sel" onchange="BUSQ.clave=this.value">' + opciones + '</select>' +
+    '<label>Fecha del informe</label><input type="date" id="bqFecha" value="' + esc(BUSQ.fecha) + '" ' +
+    'max="' + iso(new Date()) + '" onchange="BUSQ.fecha=this.value">' +
+    '<div class="chips" style="margin-top:8px"><span class="chip" onclick="bqDia(1)">Ayer</span>' +
+    '<span class="chip" onclick="bqDia(2)">Anteayer</span><span class="chip" onclick="bqDia(7)">Hace una semana</span>' +
+    '<span class="chip" onclick="bqDia(30)">Hace un mes</span></div>' +
+    '<button class="btn" id="bqBtn" style="width:100%;margin-top:12px" onclick="buscarAutos()">' +
+    (BUSQ.cargando ? 'Buscando…' : 'Buscar') + '</button></div>' +
+    '<div id="bqRes">' + resultadosBuscar() + '</div>';
+  if (BUSQ.cargando) $('bqBtn').disabled = true;
+}
+
+function bqDia(n) {
+  BUSQ.fecha = iso(new Date(Date.now() - n * 86400000));
+  var f = $('bqFecha'); if (f) f.value = BUSQ.fecha;
+}
+
+function fechaLarga(ymd) {
+  var p = String(ymd || '').split('-');
+  if (p.length !== 3) return ymd;
+  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  return d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function resultadosBuscar() {
+  var r = BUSQ.res;
+  if (!r) return '<div class="ped-sub" style="padding:4px 2px">Elegí el informe y la fecha, y tocá Buscar.</div>';
+  var con = r.informes.filter(function (a) { return a.archivos.length; });
+  var cab = '<div class="ped-sub" style="margin:4px 2px 10px">Informes del ' + esc(fechaLarga(r.fecha)) + '</div>';
+  if (!con.length) {
+    return cab + '<div class="vacio">No encontré informes de ese día ni de los 7 días de alrededor.</div>';
+  }
+  var sin = r.informes.filter(function (a) { return !a.archivos.length; }).map(function (a) { return a.nombre; });
+  return cab + con.map(function (a) {
+    var nota = a.cercanos ? '<div class="ped-sub" style="margin:2px 0 6px">De ese día no hay; el más cercano es del ' +
+      esc(fechaLarga(a.archivos[0].dia)) + '.</div>' : '';
+    var arch = a.archivos.map(function (f) {
+      return '<button class="btn sec arch" onclick="bajarAuto(\'' + esc(a.clave) + '\',\'' +
+        esc(f.fid) + '\',this)"><span class="arch-nom">' + esc(f.titulo || f.nombre) + '</span>' +
+        '<span class="arch-fecha">' + esc(fechaCorta(f.fecha)) + '</span></button>';
+    }).join('');
+    return '<div class="pedido"><div class="ped-top"><span class="ped-nom">' +
+      esc(a.dibujo || '📄') + ' ' + esc(a.nombre) + '</span>' +
+      (a.cercanos ? '<span class="badge b-pendiente">Cercano</span>' : '') + '</div>' + nota + arch + '</div>';
+  }).join('') + (sin.length && r.informes.length > 1 ?
+    '<div class="ped-sub" style="margin:6px 2px">Sin nada en esas fechas: ' + esc(sin.join(' · ')) + '</div>' : '');
+}
+
+function buscarAutos() {
+  var f = $('bqFecha'), s = $('bqInf');
+  if (f) BUSQ.fecha = f.value;
+  if (s) BUSQ.clave = s.value;
+  if (!BUSQ.fecha) { toast('Elegí una fecha.'); return; }
+  BUSQ.cargando = true; BUSQ.res = null; pintarBuscar();
+  api('buscar_auto', { clave: BUSQ.clave, fecha: BUSQ.fecha }).then(function (d) {
+    BUSQ.res = d;
+  }).catch(function (e) {
+    toast(e.message || 'No pude buscar.');
+  }).then(function () {
+    BUSQ.cargando = false;
+    if (TAB_AUTO === 'buscar') pintarBuscar();
+  });
 }
 function verAuto(v) { TAB_AUTO = v; cargarAutomaticos(); alPrincipio(); }
 
