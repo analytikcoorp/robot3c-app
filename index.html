@@ -623,6 +623,7 @@
   <section id="vMios" hidden></section>
   <section id="vUsuarios" hidden></section>
   <section id="vActividad" hidden></section>
+  <section id="vImport" hidden></section>
 </main>
 
 <nav hidden id="barra">
@@ -647,6 +648,7 @@
     <button class="sub" id="sCtaCte"    hidden onclick="verGrupo('ctacte')">Cta Cte</button>
   </div>
   <button id="tAuto" hidden onclick="ver('auto')"><span class="i">🗓️</span><span class="t">Automáticos</span></button>
+  <button id="tImport" hidden onclick="ver('import')"><span class="i">🚢</span><span class="t">Importaciones</span></button>
   <button id="tActividad" hidden onclick="ver('actividad')"><span class="i">📊</span><span class="t">Actividad</span></button>
   <button id="tUsuarios" hidden onclick="ver('usuarios')"><span class="i">👤</span><span class="t">Usuarios</span></button>
   <button id="tComandos" hidden onclick="ver('comandos')"><span class="i">🤖</span><span class="t">Comandos</span></button>
@@ -658,12 +660,13 @@
 <div class="toast" id="toast"></div>
 
 <script src="config.js"></script>
+<script src="importaciones.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-25 · 2';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-25 · 3';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -766,6 +769,7 @@ function iniciarGoogle() {
 }
 function conCredencial(resp) {
   $('loginErr').textContent = '';
+  if (window.IMP) IMP.login(resp.credential);      // misma identidad de Google para la base de Importaciones
   fetch(CONFIG.servidor, { method: 'POST', redirect: 'follow',
                            body: JSON.stringify({ accion: 'entrar', id_token: resp.credential }) })
     .then(function (r) { return r.json(); })
@@ -785,6 +789,7 @@ function conCredencial(resp) {
 function salir(msg) {
   SESION = null; ADENTRO = false; clearTimeout(timer);
   try { localStorage.removeItem('sesion'); } catch (e) {}
+  if (window.IMP) IMP.salir();
   if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
   $('login').style.display = 'flex';
   cerrarTodo();
@@ -875,6 +880,7 @@ function entrarApp(d) {
   // llamar (Google que entra solo, una sesión renovada), mover la pantalla sacaría a la
   // persona de donde estaba.
   if (primeraVez) pantallaDeArranque(d);
+  if (window.IMP) IMP.iniciar();
   prepararAvisos(d.push, d.usuario.email);
 }
 
@@ -1096,6 +1102,7 @@ var VISTAS = { pedir: ['vPedir', 'tPedir'], auto: ['vAuto', 'tAuto'], tablero: [
                mios: ['vMios', 'tMios'], usuarios: ['vUsuarios', 'tUsuarios'],
                comandos: ['vComandos', 'tComandos'],
                actividad: ['vActividad', 'tActividad'],
+               import: ['vImport', 'tImport'],
                principal: ['vPrincipal', 'tPrincipal'] };
 /** Qué tableros ve esta persona: el completo va al cajón, y Hoy y Resumen de vta tienen
  *  atajo abajo, pero solo si los tiene habilitados. Un servidor viejo no manda la lista
@@ -1309,6 +1316,7 @@ function ver(v) {
   if (v === 'preguntar') { pintarPreguntas(); cargarPreguntas(); }
   if (v === 'usuarios') cargarUsuarios();
   if (v === 'actividad') cargarActividad();
+  if (v === 'import' && window.IMP) IMP.abrir();
   alPrincipio();
 }
 
