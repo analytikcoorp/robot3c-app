@@ -661,13 +661,14 @@
 <div class="toast" id="toast"></div>
 
 <script src="config.js"></script>
+<script src="proforma.js"></script>
 <script src="importaciones.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-25 · 4';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-25 · 5';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque

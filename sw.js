@@ -4,7 +4,7 @@
  * Los pedidos al servidor NUNCA se guardan: siempre van en vivo.
  */
 var CACHE = 'robot3c-v3';
-var ARCHIVOS = ['./', './index.html', './config.js', './importaciones.js', './manifest.json', './icono-192.png', './icono-512.png', './logo-jc-blanco.png'];
+var ARCHIVOS = ['./', './index.html', './config.js', './importaciones.js', './proforma.js', './manifest.json', './icono-192.png', './icono-512.png', './logo-jc-blanco.png'];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ARCHIVOS); }).then(function () {

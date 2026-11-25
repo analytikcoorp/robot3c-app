@@ -52,6 +52,17 @@ var IMP = (function () {
     });
   }
 
+  function subir(ruta, bytes) {
+    return acceso().then(function (tok) {
+      return fetch(CONFIG.supabase_url + '/storage/v1/object/proformas/' + ruta, { method: 'POST',
+        headers: { apikey: CONFIG.supabase_key, Authorization: 'Bearer ' + tok, 'x-upsert': 'false',
+                   'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }, body: bytes });
+    }).then(function (r) {
+      if (r.ok) return;
+      return r.json().then(function (e) { throw new Error(e.message || 'No pude subir el archivo'); });
+    });
+  }
+
   // ------------------------------------------------------------ ingreso
   /** Se llama con el token de Google apenas la persona inicia sesión. */
   function login(idToken) {
@@ -110,6 +121,9 @@ var IMP = (function () {
     var chips = [['curso', 'En curso'], ['todas', 'Todas']].concat(
       E.estados.filter(function (x) { return x.activo; }).map(function (x) { return [x.id, x.nombre]; }));
     var h = '<h2 class="vt">Importaciones</h2>' +
+      '<div class="acciones" style="margin-bottom:8px">' +
+      (E.perm.cargar ? '<button class="btn" onclick="IMP.nueva()">＋ Nueva operación</button>' : '') +
+      (E.perm.admin ? '<button class="btn sec" onclick="IMP.despachante()">⚙ Despachante</button>' : '') + '</div>' +
       '<input class="buscar" id="impQ" placeholder="Buscar OP, producto o proveedor" value="' + esc(E.q) + '" ' +
       'oninput="IMP.buscar(this.value)">' +
       '<div class="chips">' + chips.map(function (c) {
@@ -135,7 +149,7 @@ var IMP = (function () {
     $('velo').style.display = 'block';
     requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
     var pedidos = [rest('operaciones?id=eq.' + id + '&select=*,estado:estados(nombre),' +
-      'despachante:despachantes(nombre),unif:operacion_ops_unificadas(op_numero,nota),' +
+      'despachante:despachantes(nombre,envio_activo),unif:operacion_ops_unificadas(op_numero,nota),' +
       'pedido:pedidos(codigo_interno,producto,moneda,proveedor:proveedores(nombre),trader:traders(nombre,comision),importador:importadores(nombre,cuit)),' +
       'items:operacion_items(linea,codigo,detalle,cantidad,precio_unit)')];
     if (E.perm.dinero) pedidos.push(rest('v_pagos_operacion?operacion_id=eq.' + id));
@@ -161,6 +175,7 @@ var IMP = (function () {
       fila('Despachante', (o.despachante || {}).nombre) + fila('Transporte', o.transporte) +
       fila('ETD', o.etd ? fecha(o.etd) : '') + fila('ETA', o.eta ? fecha(o.eta) : '') +
       ((o.unif || []).length ? fila('OP unificadas', o.unif.map(function (u) { return u.op_numero; }).join(', ')) : '');
+    h += '<div class="sub">Mail de alta al despachante</div>' + estadoMail(o);
     if (E.perm.admin || (E.perm.cargar && !o.op_numero)) {
       h += '<div class="acciones" style="margin-top:8px"><input id="impOp" placeholder="N° de OP" value="' + esc(o.op_numero || '') + '" style="flex:1">' +
         '<button class="btn sec" onclick="IMP.guardarOp(\'' + o.id + '\')">' + (o.op_numero ? 'Cambiar OP' : 'Asignar OP') + '</button></div>';
@@ -196,6 +211,139 @@ var IMP = (function () {
       .catch(function (e) { toast(/duplicate|unique/i.test(e.message) ? 'Ese N° de OP ya existe' : e.message); });
   }
 
+
+  // ------------------------------------------------------------ mail de alta
+  function saludo() { var h = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Argentina/Buenos_Aires' })) % 24;
+    return h < 12 ? 'Buenos días' : (h < 20 ? 'Buenas tardes' : 'Buenas noches'); }
+  function rellenar(t, v) { return String(t || '').replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? v[k] : m; }); }
+  function estadoMail(o) {
+    if (o.mail_alta_enviado_en) return '<div class="ped-sub">Enviado el ' + esc(new Date(o.mail_alta_enviado_en).toLocaleString('es-AR')) + '</div>';
+    if (o.mail_alta_solicitado_en) return '<div class="ped-sub">En cola: sale en los próximos minutos.</div>';
+    if (!o.proforma_liviana_path) return '<div class="ped-sub">Esta operación no tiene proforma cargada desde la app.</div>';
+    if (!(o.despachante && o.despachante.envio_activo)) return '<div class="ped-sub">No enviado. El envío está desactivado (⚙ Despachante).</div>';
+    return '<div class="ped-sub">No enviado.</div>' + (E.perm.cargar ?
+      '<div class="acciones"><button class="btn sec" onclick="IMP.pedirMail(\'' + o.id + '\')">Enviar mail de alta</button></div>' : '');
+  }
+  function pedirMail(id) {
+    rest('operaciones?id=eq.' + id + '&mail_alta_enviado_en=is.null', { metodo: 'PATCH', cuerpo: { mail_alta_solicitado_en: new Date().toISOString() } })
+      .then(function () { toast('Mail en cola'); ficha(id); }).catch(function (e) { toast(e.message); });
+  }
+
+  // ------------------------------------------------------------ alta desde proforma
+  var ALTA = null;
+  function clave(s) { return norm(s).replace(/[^a-z0-9]/g, ''); }
+  function nueva() {
+    ALTA = null;
+    $('vImport').innerHTML = '<h2 class="vt">Nueva operación</h2>' +
+      '<div class="ped-sub">Subí la proforma en Excel. Vas a revisar los datos antes de confirmar.</div>' +
+      '<input type="file" id="impArch" accept=".xlsx" onchange="IMP.leerArchivo(this)" style="margin-top:12px">' +
+      '<div class="ped-msg" id="impMsg"></div>' +
+      '<div class="acciones" style="margin-top:12px"><button class="btn sec" onclick="IMP.abrir()">Volver</button></div>';
+  }
+  function leerArchivo(inp) {
+    var f = inp.files && inp.files[0]; if (!f) return;
+    $('impMsg').textContent = 'Leyendo la proforma…';
+    Promise.all([f.arrayBuffer(), Promise.all([
+      rest('importadores?select=id,nombre&activo=eq.true&order=nombre'), rest('proveedores?select=id,nombre&order=nombre'),
+      rest('traders?select=id,nombre&order=nombre'),
+      rest('despachantes?select=id,nombre,destinatarios,copia,envio_activo,asunto_plantilla,cuerpo_plantilla&order=nombre')])])
+      .then(function (r) {
+        ALTA = { buf: new Uint8Array(r[0]), nombre: f.name, imp: r[1][0], prov: r[1][1], tr: r[1][2], desp: r[1][3] };
+        return Proforma.leerProforma(ALTA.buf);
+      }).then(function (d) { ALTA.d = d; formulario(); })
+      .catch(function (e) { $('impMsg').textContent = e.message || String(e); });
+  }
+  function opciones(lista, buscado, nuevoNombre, conVacio) {
+    var k = clave(buscado), hit = lista.filter(function (x) { return clave(x.nombre) === k; })[0];
+    return (conVacio ? '<option value="">— sin trader —</option>' : '') + lista.map(function (x) {
+      return '<option value="' + x.id + '"' + (hit && hit.id === x.id ? ' selected' : '') + '>' + esc(x.nombre) + '</option>'; }).join('') +
+      (nuevoNombre ? '<option value="__nuevo"' + (!hit ? ' selected' : '') + '>Crear: ' + esc(nuevoNombre) + '</option>' : '');
+  }
+  function resumenProducto(items) {
+    var vistos = [];
+    items.forEach(function (i) { var t = i.detalle.split(',')[0].trim(); if (t && vistos.indexOf(t) < 0) vistos.push(t); });
+    return vistos.slice(0, 5).join(', ') + (vistos.length > 5 ? '…' : '');
+  }
+  function campo(id, tit, val) { return '<div class="sub">' + tit + '</div><input id="' + id + '" value="' + esc(val || '') + '" style="width:100%">'; }
+  function formulario() {
+    var d = ALTA.d, ds = ALTA.desp[0] || {};
+    var h = '<h2 class="vt">Revisá la proforma</h2>' +
+      '<div class="ped-sub">' + esc(ALTA.nombre) + '</div>' +
+      '<div class="ped-msg">' + d.items.length + ' productos · ' + fmt(d.unidades) + ' unidades · total ' + fmt(d.total_calculado) + ' USD' +
+      (d.coincide_total === true ? ' ✔ coincide con el total del documento' :
+       d.coincide_total === false ? ' ⚠ el documento dice ' + fmt(d.total_documento) + ': revisalo' : '') + '</div>' +
+      '<div class="sub">Importador (comprador)</div><select id="impImp">' + opciones(ALTA.imp, d.comprador, d.comprador) + '</select>' +
+      '<div class="sub">Proveedor (vendedor)</div><select id="impProv">' + opciones(ALTA.prov, d.vendedor, d.vendedor) + '</select>' +
+      '<div class="sub">Trader (si hay)</div><select id="impTr">' + opciones(ALTA.tr, '', '', true) + '</select>' +
+      campo('impProd', 'Producto', resumenProducto(d.items)) + campo('impPc', 'Puerto de carga', d.puerto_carga) +
+      campo('impPd', 'Puerto de destino', d.puerto_destino) + campo('impPago', 'Forma de pago', d.pago) +
+      campo('impFec', 'Fecha de la proforma (AAAA-MM-DD)', d.fecha) + campo('impCom', 'Comentario', '') +
+      '<details style="margin-top:10px"><summary class="ped-sub">Ver los productos</summary>' + d.items.map(function (i) {
+        return '<div class="ped-sub">' + i.linea + '. ' + esc(i.codigo) + ' · ' + esc(i.detalle) + ' — ' + fmt(i.cantidad) + ' × ' + fmt(i.precio_unit) + '</div>'; }).join('') + '</details>' +
+      '<div class="sub">Mail de alta</div>' + vistaMail(ds, d) +
+      '<div class="acciones" style="margin-top:14px"><button class="btn" id="impOk" onclick="IMP.confirmar(this)">Confirmar alta</button>' +
+      '<button class="btn sec" onclick="IMP.nueva()">Cancelar</button></div><div class="ped-msg" id="impMsg"></div>';
+    $('vImport').innerHTML = h;
+  }
+  function vistaMail(ds, d) {
+    if (!ds.id) return '<div class="ped-sub">No hay despachante cargado.</div>';
+    var v = { saludo: saludo(), proveedor: d.vendedor, codigo_interno: 'PED-…' };
+    return '<div class="ped-sub"><b>Para:</b> ' + esc((ds.destinatarios || []).join(', ') || '—') + '</div>' +
+      '<div class="ped-sub"><b>CC:</b> ' + esc((ds.copia || []).join(', ') || '—') + '</div>' +
+      '<div class="ped-sub"><b>Asunto:</b> ' + esc(rellenar(ds.asunto_plantilla, v)) + '</div>' +
+      '<div class="ped-sub" style="white-space:pre-wrap">' + esc(rellenar(ds.cuerpo_plantilla, v)) + '</div>' +
+      '<div class="ped-sub"><b>Adjunto:</b> proforma sin fotos + link a la original en Drive</div>' +
+      '<div class="ped-msg">' + (ds.envio_activo ? 'Al confirmar, el mail sale solo.' : 'El envío está desactivado: NO se manda ningún mail. Se puede enviar después desde la ficha.') + '</div>';
+  }
+  function confirmar(btn) {
+    var d = ALTA.d, ds = ALTA.desp[0] || {}, msg = $('impMsg');
+    var imp = $('impImp').value, prov = $('impProv').value;
+    if (!$('impProd').value.trim()) { msg.textContent = 'Falta el producto'; return; }
+    btn.disabled = true; msg.textContent = 'Subiendo la proforma…';
+    var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+        base = new Date().getFullYear() + '/' + id + '/', pOrig = base + 'proforma.xlsx', pLite = base + 'proforma-sin-fotos.xlsx';
+    Proforma.aliviar(ALTA.buf)
+      .then(function (lite) { return subir(pOrig, ALTA.buf).then(function () { return subir(pLite, lite); }); })
+      .then(function () {
+        msg.textContent = 'Creando el pedido y la operación…';
+        return rest('rpc/alta_operacion', { metodo: 'POST', cuerpo: { p: {
+          importador_id: imp === '__nuevo' ? '' : imp, importador_nuevo: imp === '__nuevo' ? d.comprador : '',
+          proveedor_id: prov === '__nuevo' ? '' : prov, proveedor_nuevo: prov === '__nuevo' ? d.vendedor : '',
+          trader_id: $('impTr').value, producto: $('impProd').value.trim(), forma_pago: $('impPago').value.trim(),
+          puerto_carga: $('impPc').value.trim(), puerto_destino: $('impPd').value.trim(), fecha_proforma: $('impFec').value.trim(),
+          comentario: $('impCom').value.trim(), despachante_id: ds.id, proforma_path: pOrig, proforma_liviana_path: pLite,
+          enviar_mail: !!ds.envio_activo, items: d.items.map(function (i) {
+            return { linea: i.linea, codigo: i.codigo, detalle: i.detalle, cantidad: i.cantidad, precio_unit: i.precio_unit }; }) } } });
+      }).then(function (r) { toast('Operación creada: ' + r.codigo_interno); abrir(); ficha(r.operacion_id); })
+      .catch(function (e) { btn.disabled = false; msg.textContent = 'No se pudo crear: ' + (e.message || e); });
+  }
+
+  // ------------------------------------------------------------ despachante (admin)
+  function despachante() {
+    rest('despachantes?select=*&order=nombre').then(function (l) {
+      var x = l[0]; if (!x) { toast('No hay despachante'); return; }
+      $('hoja').innerHTML = '<h2>' + esc(x.nombre) + '</h2>' +
+        '<div class="sub">Para (uno por línea)</div><textarea id="dsPara" rows="3" style="width:100%">' + esc((x.destinatarios || []).join('\n')) + '</textarea>' +
+        '<div class="sub">CC (uno por línea)</div><textarea id="dsCc" rows="3" style="width:100%">' + esc((x.copia || []).join('\n')) + '</textarea>' +
+        '<div class="sub">Asunto</div><input id="dsAsu" value="' + esc(x.asunto_plantilla || '') + '" style="width:100%">' +
+        '<div class="sub">Texto ({saludo}, {proveedor} y {codigo_interno} se completan solos)</div>' +
+        '<textarea id="dsCue" rows="6" style="width:100%">' + esc(x.cuerpo_plantilla || '') + '</textarea>' +
+        '<label style="display:block;margin-top:12px"><input type="checkbox" id="dsAct"' + (x.envio_activo ? ' checked' : '') +
+        '> Envío de mails activado</label><div class="ped-sub">Apagado = el sistema no manda ningún mail.</div>' +
+        '<div class="acciones" style="margin-top:14px"><button class="btn" onclick="IMP.guardarDespachante(\'' + x.id + '\')">Guardar</button>' +
+        '<button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
+      $('velo').style.display = 'block';
+      requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
+    }).catch(function (e) { toast(e.message); });
+  }
+  function mails(t) { return String(t || '').split(/[\s,;]+/).filter(function (m) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m); }); }
+  function guardarDespachante(id) {
+    rest('despachantes?id=eq.' + id, { metodo: 'PATCH', cuerpo: { destinatarios: mails($('dsPara').value), copia: mails($('dsCc').value),
+      asunto_plantilla: $('dsAsu').value, cuerpo_plantilla: $('dsCue').value, envio_activo: $('dsAct').checked } })
+      .then(function () { toast('Guardado'); cerrarHoja(); }).catch(function (e) { toast(e.message); });
+  }
+
   return { login: login, iniciar: iniciar, salir: salir, abrir: abrir, filtrar: filtrar, buscar: buscar,
-           ficha: ficha, estado: estado, guardarOp: guardarOp };
+           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo,
+           confirmar: confirmar, despachante: despachante, guardarDespachante: guardarDespachante, pedirMail: pedirMail };
 })();
