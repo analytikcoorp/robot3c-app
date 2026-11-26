@@ -45,7 +45,8 @@ var IMP = (function () {
                    { method: op.metodo || 'GET', headers: h, body: op.cuerpo ? JSON.stringify(op.cuerpo) : undefined });
     }).then(function (r) {
       if (r.status === 204) return null;
-      return r.json().then(function (d) {
+      return r.text().then(function (t) {
+        var d = null; try { d = t ? JSON.parse(t) : null; } catch (e) { d = null; }
         if (!r.ok) throw new Error((d && (d.message || d.hint)) || 'Error de la base');
         return d;
       });
