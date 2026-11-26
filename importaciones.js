@@ -124,7 +124,7 @@ var IMP = (function () {
     var h = '<h2 class="vt">Importaciones</h2>' +
       '<div class="acciones" style="margin-bottom:8px">' +
       (E.perm.cargar ? '<button class="btn" onclick="IMP.nueva()">＋ Nueva operación</button>' : '') +
-      (E.perm.admin ? '<button class="btn sec" onclick="IMP.despachante()">⚙ Despachante</button>' : '') + '</div>' +
+      (E.perm.admin ? '<button class="btn sec" onclick="IMP.despachante()">⚙ Despachante</button><button class="btn sec" onclick="IMP.valoresDefecto()">⚙ Cálculos</button>' : '') + '</div>' +
       '<input class="buscar" id="impQ" placeholder="Buscar OP, producto o proveedor" value="' + esc(E.q) + '" ' +
       'oninput="IMP.buscar(this.value)">' +
       '<div class="chips">' + chips.map(function (c) {
@@ -153,22 +153,26 @@ var IMP = (function () {
       'despachante:despachantes(nombre,envio_activo),unif:operacion_ops_unificadas(op_numero,nota),' +
       'pedido:pedidos(codigo_interno,producto,moneda,proveedor:proveedores(nombre),trader:traders(nombre,comision),importador:importadores(nombre,cuit)),' +
       'items:operacion_items(id,linea,codigo,detalle,cantidad,precio_unit,foto_path)')];
-    if (E.perm.dinero) pedidos.push(rest('v_pagos_operacion?operacion_id=eq.' + id));
+    if (E.perm.dinero) { pedidos.push(rest('v_pagos_operacion?operacion_id=eq.' + id)); pedidos.push(rest('pagos_operacion?operacion_id=eq.' + id + '&order=fecha,creado_en')); }
     Promise.all(pedidos).then(function (r) {
-      return firmar((r[0][0].items || []).map(function (i) { return i.foto_path; })).then(function (urls) { pintarFicha(r[0][0], r[1] || [], urls); });
+      return firmar((r[0][0].items || []).map(function (i) { return i.foto_path; })).then(function (urls) { pintarFicha(r[0][0], r[1] || [], urls, r[2] || []); });
     })
       .catch(function (e) { $('hoja').innerHTML = '<div class="vacio">' + esc(e.message) + '</div>'; });
   }
   var BLOQ = { proveedor: 'Proveedor', logistica: 'Logística', nacionalizacion: 'Nacionalización' };
   var FI = null;
-  function pintarFicha(o, pagos, urls) {
-    FI = o;
+  function pintarFicha(o, pagos, urls, pp) {
+    FI = o; o._pagos = pp || [];
     var p = o.pedido || {}, tot = 0;
     (o.items || []).sort(function (a, b) { return a.linea - b.linea; })
       .forEach(function (i) { tot += i.cantidad * i.precio_unit; });
     var h = (E.perm.dinero ? '<div class="chips"><span class="chip act">Operación</span><span class="chip" onclick="IMP.calculos(\'' + o.id + '\')">Cálculos</span></div>' : '') +
       '<h2>' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc(p.codigo_interno)) + '</h2>' +
       '<div class="ped-sub">' + esc(p.codigo_interno) + ' · ' + esc(p.producto || '') + '</div>';
+    if (E.perm.dinero) {
+      var pg = 0; o._pagos.forEach(function (x) { pg += Number(x.monto); });
+      h += '<div class="ped-msg"><b>Saldo con el proveedor: ' + fmt(tot - pg) + ' ' + esc(p.moneda || 'USD') + '</b><br>Total ' + fmt(tot) + ' · pagado ' + fmt(pg) + '</div>';
+    }
     if (E.perm.cargar) {
       h += '<div class="sub">Estado</div><select id="impEst" onchange="IMP.estado(\'' + o.id + '\',this.value)">' +
         E.estados.filter(function (x) { return x.activo; }).map(function (x) {
@@ -188,7 +192,12 @@ var IMP = (function () {
         '<button class="btn sec" onclick="IMP.guardarOp(\'' + o.id + '\')">' + (o.op_numero ? 'Cambiar OP' : 'Asignar OP') + '</button></div>';
     }
     if (E.perm.dinero) {
-      h += '<div class="sub">Pagos</div>' + (pagos.length ? pagos.map(function (x) {
+      h += '<div class="sub">Pagos al proveedor</div>' + (o._pagos.length ? o._pagos.map(function (x) {
+        return '<div class="ped-sub" style="display:flex;align-items:center;gap:8px"><span style="flex:1"><b>' + esc(x.concepto) + '</b> · ' + esc(fecha(x.fecha)) + ' · ' + fmt(x.monto) + ' ' + esc(x.moneda) +
+          (x.comentario ? ' · ' + esc(x.comentario) : '') + '</span><button class="chip" style="padding:2px 9px" onclick="IMP.editarPago(\'' + o.id + '\',\'' + x.id + '\')">✎</button></div>';
+      }).join('') : '<div class="ped-sub">Todavía no hay pagos registrados.</div>') +
+        '<div class="acciones" style="margin-top:6px"><button class="btn sec" onclick="IMP.editarPago(\'' + o.id + '\',\'\')">＋ Registrar pago</button></div>' +
+        '<div class="sub">Obligaciones por bloque</div>' + (pagos.length ? pagos.map(function (x) {
         return fila((BLOQ[x.bloque] || x.bloque) + ' (' + x.moneda + ')',
           'debe ' + fmt(x.a_pagar) + ' · pagado ' + fmt(x.pagado) + ' · saldo ' + fmt(x.saldo) + ' · ' + x.estado_pago);
       }).join('') : '<div class="ped-sub">Todavía no hay obligaciones cargadas.</div>');
@@ -318,6 +327,8 @@ var IMP = (function () {
       fila('Total gastos (sin IVA/créditos)', fmt(r.gastos)) + fila('Costo total', fmt(r.total)) +
       fila('Costo unitario promedio', fmt(r.unit)) + fila('Recargo sobre FOB', r.fob ? pct(r.total / r.fob - 1) : '') +
       fila('Créditos fiscales', fmt(r.cred));
+    var pg = 0; (o._pagos || []).forEach(function (x) { pg += Number(x.monto); });
+    h += fila('Pagado al proveedor', fmt(pg)) + fila('Saldo con el proveedor', fmt(r.fob - pg));
     // tributos
     h += '<div class="sub">Tributos de importación</div><div class="tabla-items"><table><thead><tr><th>Tributo</th><th>Base</th><th>%</th><th>Costo</th><th>Crédito</th><th></th></tr></thead><tbody>' +
       c.trib.map(function (t) {
@@ -632,6 +643,81 @@ var IMP = (function () {
       .catch(function (e) { btn.disabled = false; msg.textContent = 'No se pudo crear: ' + (e.message || e); });
   }
 
+  // ------------------------------------------------------------ pagos al proveedor
+  function editarPago(opId, pid) {
+    var x = (FI._pagos || []).filter(function (y) { return y.id === pid; })[0], nuevo = !x;
+    if (nuevo) x = { concepto: FI._pagos.length ? 'Pago' : 'Seña', fecha: new Date().toISOString().slice(0, 10), monto: '', comentario: '' };
+    $('hoja').innerHTML = '<h2 class="vt">' + (nuevo ? 'Registrar pago al proveedor' : 'Editar pago') + '</h2><div class="sub">Tipo</div><select id="pgCon">' +
+      ['Seña', 'Pago', 'Saldo'].map(function (k) { return '<option' + (k === x.concepto ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' +
+      dato('pgFec', 'Fecha del pago', x.fecha, 'date') + dato('pgMon', 'Monto (' + esc((FI.pedido || {}).moneda || 'USD') + ')', x.monto, 'number') + dato('pgCom', 'Comentario', x.comentario) +
+      '<div class="acciones" style="margin-top:14px"><button class="btn" onclick="IMP.guardarPago(\'' + opId + '\',\'' + (nuevo ? '' : pid) + '\')">Guardar</button><button class="btn sec" onclick="IMP.ficha(\'' + opId + '\')">Cancelar</button>' +
+      (nuevo ? '' : '<button class="btn sec" style="margin-left:auto;color:#e5484d" onclick="IMP.borrarPago(\'' + opId + '\',\'' + pid + '\')">Sacar</button>') + '</div>';
+  }
+  function guardarPago(opId, pid) {
+    var m = Number(vv('pgMon')); if (!(m > 0) || !vv('pgFec')) { toast('Poné fecha y un monto mayor a cero'); return; }
+    var c = { concepto: $('pgCon').value, fecha: vv('pgFec'), monto: m, comentario: nul(vv('pgCom')) };
+    var q = pid ? rest('pagos_operacion?id=eq.' + pid, { metodo: 'PATCH', cuerpo: c })
+                : (c.operacion_id = opId, c.moneda = (FI.pedido || {}).moneda || 'USD', c.creado_por = ses && ses.uid, rest('pagos_operacion', { metodo: 'POST', cuerpo: c }));
+    q.then(function () { bitacora(opId, pid ? 'pago editado' : 'pago registrado', c); toast('Pago guardado'); ficha(opId); }).catch(function (e) { toast(e.message || e); });
+  }
+  function borrarPago(opId, pid) {
+    if (!confirm('¿Sacar este pago?')) return;
+    rest('pagos_operacion?id=eq.' + pid, { metodo: 'DELETE' }).then(function () { bitacora(opId, 'pago quitado', { id: pid }); ficha(opId); }).catch(function (e) { toast(e.message || e); });
+  }
+
+  // ------------------------------------------------------------ valores por defecto del cálculo (admin)
+  var DEF = null;
+  function valoresDefecto() {
+    Promise.all([rest('tributos_default?order=orden'), rest('gastos_default?order=orden'), rest('costos_conceptos?order=concepto')]).then(function (r) {
+      DEF = { t: r[0], g: r[1], c: r[2].filter(function (k) { return k.concepto !== 'Impuestos' && GRUPOS[k.grupo]; }) };
+      pintarDef();
+      $('velo').style.display = 'block'; requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
+    }).catch(function (e) { toast(e.message || e); });
+  }
+  function leerDef() {
+    DEF.t.forEach(function (t, i) { t.tributo = $('dt' + i + 'n').value; t.base_tipo = $('dt' + i + 'b').value; t.base_fija = $('dt' + i + 'f').value === '' ? null : Number($('dt' + i + 'f').value);
+      t.alicuota = Number($('dt' + i + 'p').value || 0) / 100; t.es_credito = $('dt' + i + 'c').value === '1'; });
+    DEF.g.forEach(function (g, i) { g.concepto = $('dg' + i + 'k').value; g.monto = Number($('dg' + i + 'm').value || 0); g.credito_pct = Number($('dg' + i + 'c').value || 0) / 100; });
+  }
+  function pintarDef() {
+    var h = '<h2 class="vt">Valores por defecto de cálculos</h2><div class="ped-msg">Se usan al tocar «Cargar valores por defecto» en una operación nueva. Las operaciones que ya los cargaron no cambian.</div><div class="sub">Tributos</div>' +
+      DEF.t.map(function (t, i) {
+        return '<div style="border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px"><input id="dt' + i + 'n" value="' + esc(t.tributo) + '" style="width:100%">' +
+          '<select id="dt' + i + 'b" style="width:100%;margin-top:4px">' + Object.keys(BASES).map(function (k) { return '<option value="' + k + '"' + (k === t.base_tipo ? ' selected' : '') + '>' + esc(BASES[k]) + '</option>'; }).join('') + '</select>' +
+          '<div style="display:flex;gap:6px;margin-top:4px"><input id="dt' + i + 'f" type="number" placeholder="monto base" value="' + (t.base_fija == null ? '' : t.base_fija) + '" style="flex:1;min-width:0">' +
+          '<input id="dt' + i + 'p" type="number" placeholder="%" value="' + Math.round(t.alicuota * 10000) / 100 + '" style="flex:1;min-width:0"></div>' +
+          '<select id="dt' + i + 'c" style="width:100%;margin-top:4px"><option value="0"' + (t.es_credito ? '' : ' selected') + '>Costo</option><option value="1"' + (t.es_credito ? ' selected' : '') + '>Crédito fiscal</option></select>' +
+          '<button class="chip" style="margin-top:6px;color:#e5484d" onclick="IMP.quitarDef(\'t\',' + i + ')">Sacar</button></div>'; }).join('') +
+      '<div class="acciones"><button class="btn sec" onclick="IMP.agregarDef(\'t\')">＋ Tributo</button></div><div class="sub">Gastos</div>' +
+      DEF.g.map(function (g, i) {
+        return '<div style="border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px"><select id="dg' + i + 'k" style="width:100%">' +
+          DEF.c.map(function (k) { return '<option' + (k.concepto === g.concepto ? ' selected' : '') + '>' + esc(k.concepto) + '</option>'; }).join('') + '</select>' +
+          '<div style="display:flex;gap:6px;margin-top:4px"><input id="dg' + i + 'm" type="number" placeholder="monto" value="' + g.monto + '" style="flex:1;min-width:0">' +
+          '<input id="dg' + i + 'c" type="number" placeholder="% IVA" value="' + Math.round(g.credito_pct * 10000) / 100 + '" style="flex:1;min-width:0"></div>' +
+          '<button class="chip" style="margin-top:6px;color:#e5484d" onclick="IMP.quitarDef(\'g\',' + i + ')">Sacar</button></div>'; }).join('') +
+      '<div class="acciones"><button class="btn sec" onclick="IMP.agregarDef(\'g\')">＋ Gasto</button></div>' +
+      '<div class="acciones" style="margin-top:14px"><button class="btn" onclick="IMP.guardarDef()">Guardar</button><button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
+    $('hoja').innerHTML = h;
+  }
+  function agregarDef(k) {
+    leerDef();
+    if (k === 't') DEF.t.push({ tributo: 'Nuevo tributo', base_tipo: 'base_iva', base_fija: null, alicuota: 0, es_credito: false });
+    else DEF.g.push({ concepto: DEF.c[0].concepto, monto: 0, credito_pct: 0.21 });
+    pintarDef();
+  }
+  function quitarDef(k, i) { leerDef(); DEF[k].splice(i, 1); pintarDef(); }
+  /** Reemplaza las plantillas completas (son pocas filas): borra y vuelve a cargar con el orden de la pantalla. */
+  function guardarDef() {
+    leerDef();
+    var t = DEF.t.map(function (x, i) { return { orden: i + 1, tributo: x.tributo, base_tipo: x.base_tipo, base_fija: x.base_tipo === 'manual' ? x.base_fija : null, alicuota: x.alicuota, es_credito: x.es_credito }; });
+    var g = DEF.g.map(function (x, i) { return { orden: i + 1, concepto: x.concepto, monto: x.monto, credito_pct: x.credito_pct }; });
+    if (t.some(function (x) { return !x.tributo; })) { toast('Hay un tributo sin nombre'); return; }
+    rest('tributos_default?orden=gt.0', { metodo: 'DELETE' }).then(function () { return rest('gastos_default?orden=gt.0', { metodo: 'DELETE' }); })
+      .then(function () { return t.length ? rest('tributos_default', { metodo: 'POST', cuerpo: t }) : null; })
+      .then(function () { return g.length ? rest('gastos_default', { metodo: 'POST', cuerpo: g }) : null; })
+      .then(function () { toast('Valores por defecto guardados'); cerrarHoja(); }).catch(function (e) { toast(e.message || e); });
+  }
+
   // ------------------------------------------------------------ despachante (admin)
   function despachante() {
     rest('despachantes?select=*&order=nombre').then(function (l) {
@@ -658,6 +744,6 @@ var IMP = (function () {
   }
 
   return { login: login, iniciar: iniciar, salir: salir, abrir: abrir, filtrar: filtrar, buscar: buscar,
-           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, elegirFoto: elegirFoto,
+           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarPago: editarPago, guardarPago: guardarPago, borrarPago: borrarPago, valoresDefecto: valoresDefecto, agregarDef: agregarDef, quitarDef: quitarDef, guardarDef: guardarDef, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, elegirFoto: elegirFoto,
            confirmar: confirmar, despachante: despachante, guardarDespachante: guardarDespachante, pedirMail: pedirMail };
 })();
