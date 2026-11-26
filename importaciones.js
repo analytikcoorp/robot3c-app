@@ -168,7 +168,7 @@ var IMP = (function () {
     var p = o.pedido || {}, tot = 0;
     (o.items || []).sort(function (a, b) { return a.linea - b.linea; })
       .forEach(function (i) { tot += i.cantidad * i.precio_unit; });
-    var h = (E.perm.dinero ? '<div class="chips"><span class="chip act">Operación</span><span class="chip" onclick="IMP.calculos(\'' + o.id + '\')">Cálculos</span></div>' : '') +
+    var h = pestanas(o.id, 'op') +
       '<h2>' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc(p.codigo_interno)) + ((p.proveedor || {}).nombre ? ' · ' + esc(p.proveedor.nombre) : '') + '</h2>' +
       '<div class="ped-sub">' + esc(p.codigo_interno) + ' · ' + esc(p.producto || '') + '</div>';
     if (E.perm.dinero) {
@@ -324,7 +324,7 @@ var IMP = (function () {
   function pintarCalculos() {
     var c = CA, o = c.o, r = c.r, mon = esc((o.pedido || {}).moneda || 'USD'), id = c.id;
     var vacio = !c.trib.length && !c.obl.length;
-    var h = '<div class="chips"><span class="chip" onclick="IMP.ficha(\'' + id + '\')">Operación</span><span class="chip act">Cálculos</span></div>' +
+    var h = pestanas(id, 'calc') +
       '<h2>' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc((o.pedido || {}).codigo_interno)) + ' · cálculos</h2>';
     if (vacio) h += '<div class="ped-msg">Todavía no hay costos cargados. Podés empezar con los valores del modelo de tus hojas (derechos 20 %, tasa 3 %, IVA 21 %, honorarios del despachante…) y después cambiar lo que haga falta.</div>' +
       '<div class="acciones"><button class="btn" onclick="IMP.defaults(\'' + id + '\')">Cargar valores por defecto</button></div>';
@@ -516,6 +516,40 @@ var IMP = (function () {
       return Promise.all([una(), una(), una(), una()]).then(function () { return [hechas, falla]; });
     }).then(function (r) { traerBusy = false; toast(r[0] + ' fotos cargadas' + (r[1] ? ' · ' + r[1] + ' fallaron' : '')); ficha(opId); })
       .catch(function (e) { traerBusy = false; msg('📷 Traer fotos de la proforma'); toast(e.message || e); });
+  }
+
+  // ------------------------------------------------------------ pestañas y archivos de Drive
+  function pestanas(id, act) {
+    function t(k, txt, fn) { return '<span class="chip' + (k === act ? ' act' : '') + '"' + (k === act ? '' : ' onclick="IMP.' + fn + '(\'' + id + '\')"') + '>' + txt + '</span>'; }
+    return '<div class="chips">' + t('op', 'Operación', 'ficha') + t('arch', 'Archivos', 'archivos') + (E.perm.dinero ? t('calc', 'Cálculos', 'calculos') : '') + '</div>';
+  }
+  function icono(m) {
+    m = String(m || '');
+    return /pdf/.test(m) ? '📕' : /image/.test(m) ? '🖼️' : /sheet|excel|csv/.test(m) ? '📗' : /word|document|text/.test(m) ? '📘' : /zip|compressed/.test(m) ? '🗜️' : /folder/.test(m) ? '📁' : '📄';
+  }
+  function tam(b) { b = Number(b || 0); return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b ? b + ' B' : ''; }
+  function archivos(id) {
+    var o = FI;
+    $('hoja').innerHTML = '<div class="vacio">Cargando archivos…</div>';
+    rest('documentos?operacion_id=eq.' + id + '&select=id,tipo,nombre,drive_url,carpeta,mime,modificado_en,tamano&order=carpeta.asc.nullsfirst,nombre.asc').then(function (l) {
+      var grupos = {}, orden = [];
+      l.forEach(function (x) { var k = x.carpeta || ''; if (!grupos[k]) { grupos[k] = []; orden.push(k); } grupos[k].push(x); });
+      var h = pestanas(id, 'arch') + '<h2>' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc((o.pedido || {}).codigo_interno)) + ((o.pedido || {}).proveedor ? ' · ' + esc(o.pedido.proveedor.nombre) : '') + ' · archivos</h2>';
+      if (o.drive_folder_url) h += '<div class="acciones"><a class="btn sec" style="text-decoration:none;text-align:center" href="' + esc(o.drive_folder_url) + '" target="_blank" rel="noopener">📁 Abrir la carpeta en Drive</a></div>' +
+        '<div class="ped-sub">' + (o.drive_sync_en ? 'Actualizado el ' + esc(new Date(o.drive_sync_en).toLocaleString('es-AR')) + ' · se actualiza solo cada 15 minutos.' : '') + '</div>';
+      if (!l.length) h += '<div class="ped-msg">' + (o.drive_folder_url ? 'La carpeta todavía no tiene archivos, o todavía no se actualizó el listado.' :
+        (o.op_numero ? 'Todavía no se encontró la carpeta de esta operación en Drive. Aparece sola cuando exista una carpeta con el N° ' + esc(o.op_numero) + ' en el nombre.' :
+        'Esta operación todavía no tiene N° de OP: cuando lo tenga, se busca su carpeta en Drive.')) + '</div>';
+      orden.forEach(function (k) {
+        h += '<div class="sub">' + (k ? '📁 ' + esc(k) : 'Carpeta principal') + ' (' + grupos[k].length + ')</div>' + grupos[k].map(function (x) {
+          return '<a href="' + esc(x.drive_url) + '" target="_blank" rel="noopener" style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);color:inherit;text-decoration:none">' +
+            '<span style="font-size:22px">' + icono(x.mime) + '</span><span style="flex:1;min-width:0"><span style="display:block;word-break:break-word">' + esc(x.nombre) + '</span>' +
+            '<span class="ped-sub" style="display:block">' + (x.modificado_en ? esc(new Date(x.modificado_en).toLocaleDateString('es-AR')) : '') + (x.tamano ? ' · ' + tam(x.tamano) : '') + '</span></span></a>';
+        }).join('');
+      });
+      h += '<div class="acciones" style="margin-top:14px"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
+      $('hoja').innerHTML = h;
+    }).catch(function (e) { $('hoja').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>'; });
   }
 
   // ------------------------------------------------------------ fotos de productos
@@ -883,6 +917,6 @@ var IMP = (function () {
   }
 
   return { login: login, iniciar: iniciar, salir: salir, abrir: abrir, filtrar: filtrar, buscar: buscar,
-           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarPago: editarPago, guardarPago: guardarPago, borrarPago: borrarPago, valoresDefecto: valoresDefecto, agregarDef: agregarDef, quitarDef: quitarDef, guardarDef: guardarDef, itemsEditar: itemsEditar, itemsGuardar: itemsGuardar, itemsFila: itemsFila, itemsQuitar: itemsQuitar, itemsCancelar: itemsCancelar, tribEditar: tribEditar, tribGuardar: tribGuardar, tribFila: tribFila, tribQuitar: tribQuitar, tribCancelar: tribCancelar, gastEditar: gastEditar, gastGuardar: gastGuardar, gastFila: gastFila, gastQuitar: gastQuitar, gastCancelar: gastCancelar, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, traerFotos: traerFotos, elegirFoto: elegirFoto,
+           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarPago: editarPago, guardarPago: guardarPago, borrarPago: borrarPago, valoresDefecto: valoresDefecto, agregarDef: agregarDef, quitarDef: quitarDef, guardarDef: guardarDef, itemsEditar: itemsEditar, itemsGuardar: itemsGuardar, itemsFila: itemsFila, itemsQuitar: itemsQuitar, itemsCancelar: itemsCancelar, tribEditar: tribEditar, tribGuardar: tribGuardar, tribFila: tribFila, tribQuitar: tribQuitar, tribCancelar: tribCancelar, gastEditar: gastEditar, gastGuardar: gastGuardar, gastFila: gastFila, gastQuitar: gastQuitar, gastCancelar: gastCancelar, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, traerFotos: traerFotos, archivos: archivos, elegirFoto: elegirFoto,
            confirmar: confirmar, despachante: despachante, guardarDespachante: guardarDespachante, pedirMail: pedirMail };
 })();
