@@ -505,6 +505,7 @@
   .tabla-items th { position: sticky; top: 0; background: var(--card-2); color: var(--accent); text-align: left; font-weight: 800;
     padding: 7px 8px; border-bottom: 1px solid var(--line-fuerte); white-space: nowrap; }
   .tabla-items td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .tabla-items input.cel, .tabla-items select.cel { padding: 5px 6px; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-2); color: inherit; max-width: 100%; box-sizing: border-box; }
   .tabla-items td.f { width: 64px; min-width: 64px; }
   .tabla-items .mini { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; display: block; cursor: zoom-in; border: 1px solid var(--line); }
   .tabla-items button.mini.vacia { background: var(--card-2); color: var(--accent); font-size: 22px; cursor: pointer; }
@@ -690,7 +691,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-26 · 5';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-26 · 6';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque

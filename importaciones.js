@@ -146,6 +146,7 @@ var IMP = (function () {
 
   // ------------------------------------------------------------ ficha
   function ficha(id) {
+    EI = null; TE = null; GE = null;
     $('hoja').innerHTML = '<div class="vacio">Cargando…</div>';
     $('velo').style.display = 'block';
     requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
@@ -162,7 +163,7 @@ var IMP = (function () {
   var BLOQ = { proveedor: 'Proveedor', logistica: 'Logística', nacionalizacion: 'Nacionalización' };
   var FI = null;
   function pintarFicha(o, pagos, urls, pp) {
-    FI = o; o._pagos = pp || [];
+    FI = o; o._pagos = pp || []; LAST = [o, pagos, urls, pp];
     var p = o.pedido || {}, tot = 0;
     (o.items || []).sort(function (a, b) { return a.linea - b.linea; })
       .forEach(function (i) { tot += i.cantidad * i.precio_unit; });
@@ -203,7 +204,9 @@ var IMP = (function () {
       }).join('') : '<div class="ped-sub">Todavía no hay obligaciones cargadas.</div>');
     }
     h += '<div class="sub">Productos (' + (o.items || []).length + ' líneas · total ' + fmt(tot) + ' ' + esc(p.moneda || 'USD') + ')</div>' +
-      tablaItems(o.items || [], p.moneda, { src: function (i) { return urls && urls[i.foto_path] || ''; }, editar: E.perm.cargar ? o.id : '' }) +
+      (E.perm.cargar && !EI ? '<div class="acciones" style="margin-bottom:6px"><button class="btn sec" onclick="IMP.itemsEditar(\'' + o.id + '\')">✎ Editar tabla</button></div>' : '') +
+      tablaItems(o.items || [], p.moneda, { src: function (i) { return urls && urls[i.foto_path] || ''; }, editar: E.perm.cargar && !EI ? o.id : '', editando: !!EI }) +
+      (EI ? '<div class="acciones" style="margin-top:8px"><button class="btn" onclick="IMP.itemsGuardar()">Guardar cambios</button><button class="btn sec" onclick="IMP.itemsFila()">＋ Fila</button><button class="btn sec" onclick="IMP.itemsCancelar()">Cancelar</button></div>' : '') +
       '<div class="acciones" style="margin-top:14px"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
     $('hoja').innerHTML = h;
   }
@@ -330,21 +333,21 @@ var IMP = (function () {
     var pg = 0; (o._pagos || []).forEach(function (x) { pg += Number(x.monto); });
     h += fila('Pagado al proveedor', fmt(pg)) + fila('Saldo con el proveedor', fmt(r.fob - pg));
     // tributos
-    h += '<div class="sub">Tributos de importación</div><div class="tabla-items"><table><thead><tr><th>Tributo</th><th>Base</th><th>%</th><th>Costo</th><th>Crédito</th><th></th></tr></thead><tbody>' +
+    h += '<div class="sub">Tributos de importación</div>' + (TE ? '' : '<div class="acciones" style="margin-bottom:6px"><button class="btn sec" onclick="IMP.tribEditar()">✎ Editar tabla</button></div>') +
+      (TE ? tablaTribEd() : '<div class="tabla-items"><table><thead><tr><th>Tributo</th><th>Base</th><th>%</th><th>Costo</th><th>Crédito</th><th></th></tr></thead><tbody>' +
       c.trib.map(function (t) {
         return '<tr><td class="d">' + esc(t.tributo) + '<div class="ped-sub">' + esc(BASES[t.base_tipo]) + '</div></td><td class="n">' + fmt(t._base) + '</td><td class="n">' + pct(t.alicuota) +
           '</td><td class="n">' + (t.es_credito ? '' : fmt(t._monto)) + '</td><td class="n">' + (t.es_credito ? fmt(t._monto) : '') +
-          '</td><td><button class="chip" style="padding:2px 9px" onclick="IMP.editarTributo(\'' + t.id + '\')">✎</button></td></tr>'; }).join('') +
-      '</tbody><tfoot><tr><td colspan="3">Total</td><td class="n">' + fmt(r.costoT) + '</td><td class="n">' + fmt(r.credT) + '</td><td></td></tr></tfoot></table></div>' +
-      '<div class="acciones" style="margin-top:8px"><button class="btn sec" onclick="IMP.editarTributo(\'\')">＋ Agregar tributo</button></div>';
+          '</td><td></td></tr>'; }).join('') +
+      '</tbody><tfoot><tr><td colspan="3">Total</td><td class="n">' + fmt(r.costoT) + '</td><td class="n">' + fmt(r.credT) + '</td><td></td></tr></tfoot></table></div>');
     // gastos
     var gastos = c.obl.filter(function (x) { return x.concepto !== 'Impuestos' && r.grupo[x.concepto] && r.grupo[x.concepto] !== 'proveedor'; });
-    h += '<div class="sub">Gastos</div><div class="tabla-items"><table><thead><tr><th>Concepto</th><th>Grupo</th><th>Monto</th><th>IVA crédito</th><th></th></tr></thead><tbody>' +
+    h += '<div class="sub">Gastos</div>' + (GE ? '' : '<div class="acciones" style="margin-bottom:6px"><button class="btn sec" onclick="IMP.gastEditar()">✎ Editar tabla</button></div>') +
+      (GE ? tablaGastoEd() : '<div class="tabla-items"><table><thead><tr><th>Concepto</th><th>Grupo</th><th>Monto</th><th>IVA crédito</th><th></th></tr></thead><tbody>' +
       gastos.map(function (x) {
         return '<tr><td class="d">' + esc(x.concepto) + (x.vencimiento ? '<div class="ped-sub">vence ' + esc(fecha(x.vencimiento)) + '</div>' : '') + '</td><td>' + esc(GRUPOS[r.grupo[x.concepto]] || '') +
-          '</td><td class="n">' + fmt(x.monto) + '</td><td class="n">' + fmt(x.credito_fiscal) +
-          '</td><td><button class="chip" style="padding:2px 9px" onclick="IMP.editarGasto(\'' + x.id + '\')">✎</button></td></tr>'; }).join('') +
-      '</tbody></table></div><div class="acciones" style="margin-top:8px"><button class="btn sec" onclick="IMP.editarGasto(\'\')">＋ Agregar gasto</button></div>';
+          '</td><td class="n">' + fmt(x.monto) + '</td><td class="n">' + fmt(x.credito_fiscal) + '</td><td></td></tr>'; }).join('') +
+      '</tbody></table></div>');
     // costo por producto
     h += '<div class="sub">Costo por producto</div><div class="tabla-items"><table><thead><tr><th>#</th><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Financ.</th><th>Flete+seg.</th><th>Impos.</th><th>Adm.</th><th>Costo unit.</th><th>Costo total</th><th>%</th></tr></thead><tbody>' +
       (o.items || []).map(function (i) {
@@ -362,6 +365,75 @@ var IMP = (function () {
       '<div class="acciones" style="margin-top:14px"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
     $('hoja').innerHTML = h;
   }
+  // ---- edición de tributos y gastos directamente en la tabla
+  var TE = null, GE = null;
+  function cp(x) { return JSON.parse(JSON.stringify(x)); }
+  function tablaTribEd() {
+    return '<div class="tabla-items"><table><thead><tr><th>Tributo</th><th>Se calcula sobre</th><th>Monto base</th><th>%</th><th>Tipo</th><th></th></tr></thead><tbody>' +
+      TE.rows.map(function (t, k) {
+        if (t._del) return '';
+        return '<tr><td><input id="te' + k + 'n" value="' + esc(t.tributo) + '" class="cel" style="width:150px"></td><td><select id="te' + k + 'b" class="cel">' +
+          Object.keys(BASES).map(function (b) { return '<option value="' + b + '"' + (b === t.base_tipo ? ' selected' : '') + '>' + esc(BASES[b]) + '</option>'; }).join('') + '</select></td>' +
+          '<td class="n"><input id="te' + k + 'f" type="number" step="any" value="' + esc(t.base_imponible) + '" class="cel" style="width:80px"></td>' +
+          '<td class="n"><input id="te' + k + 'p" type="number" step="any" value="' + Math.round(t.alicuota * 10000) / 100 + '" class="cel" style="width:64px"></td>' +
+          '<td><select id="te' + k + 'c" class="cel"><option value="0"' + (t.es_credito ? '' : ' selected') + '>Costo</option><option value="1"' + (t.es_credito ? ' selected' : '') + '>Crédito</option></select></td>' +
+          '<td><button class="chip" style="padding:2px 9px;color:#e5484d" onclick="IMP.tribQuitar(' + k + ')">✕</button></td></tr>'; }).join('') +
+      '</tbody></table></div><div class="ped-sub">En «Monto fijo» poné el monto base y 100 de %. El monto base solo se usa en «Monto fijo».</div>' +
+      '<div class="acciones" style="margin-top:8px"><button class="btn" onclick="IMP.tribGuardar()">Guardar cambios</button><button class="btn sec" onclick="IMP.tribFila()">＋ Fila</button><button class="btn sec" onclick="IMP.tribCancelar()">Cancelar</button></div>';
+  }
+  function tribEditar() { TE = { rows: cp(CA.trib) }; pintarCalculos(); }
+  function leerTE() { TE.rows.forEach(function (t, k) { if (t._del) return; t.tributo = $('te' + k + 'n').value; t.base_tipo = $('te' + k + 'b').value; t.base_imponible = $('te' + k + 'f').value; t.alicuota = Number($('te' + k + 'p').value || 0) / 100; t.es_credito = $('te' + k + 'c').value === '1'; }); }
+  function tribFila() { leerTE(); TE.rows.push({ tributo: '', base_tipo: 'base_iva', base_imponible: 0, alicuota: 0, es_credito: false }); pintarCalculos(); }
+  function tribQuitar(k) { leerTE(); if (TE.rows[k].id) TE.rows[k]._del = true; else TE.rows.splice(k, 1); pintarCalculos(); }
+  function tribCancelar() { TE = null; pintarCalculos(); }
+  function tribGuardar() {
+    leerTE(); var ps = [], mal = false, mx = 0, orig = {}; CA.trib.forEach(function (t) { orig[t.id] = t; if (t.orden > mx) mx = t.orden; });
+    TE.rows.forEach(function (t) {
+      if (t._del) { ps.push(rest('tributos_operacion?id=eq.' + t.id, { metodo: 'DELETE' })); return; }
+      var c = { tributo: (t.tributo || '').trim(), base_tipo: t.base_tipo, base_imponible: Number(t.base_imponible || 0), alicuota: t.alicuota, es_credito: t.es_credito };
+      if (!c.tributo) { mal = true; return; }
+      if (!t.id) { c.operacion_id = CA.id; c.orden = ++mx; ps.push(rest('tributos_operacion', { metodo: 'POST', cuerpo: c })); return; }
+      var x = orig[t.id];
+      if (x.tributo !== c.tributo || x.base_tipo !== c.base_tipo || (c.base_tipo === 'manual' && Number(x.base_imponible) !== c.base_imponible) || Number(x.alicuota) !== c.alicuota || x.es_credito !== c.es_credito) {
+        if (c.base_tipo !== 'manual') delete c.base_imponible;
+        ps.push(rest('tributos_operacion?id=eq.' + t.id, { metodo: 'PATCH', cuerpo: c }));
+      }
+    });
+    if (mal) { toast('Hay un tributo sin nombre'); return; }
+    var n = ps.length; Promise.all(ps).then(function () { if (n) bitacora(CA.id, 'tributos editados', { cambios: n }); TE = null; toast(n ? 'Cambios guardados' : 'Sin cambios'); calculos(CA.id); }).catch(function (e) { toast(e.message || e); });
+  }
+  function tablaGastoEd() {
+    var op = CA.conceptos.filter(function (k) { return k.concepto !== 'Impuestos' && GRUPOS[k.grupo]; });
+    return '<div class="tabla-items"><table><thead><tr><th>Concepto</th><th>Monto</th><th>IVA crédito</th><th></th></tr></thead><tbody>' +
+      GE.rows.map(function (x, k) {
+        if (x._del) return '';
+        return '<tr><td><select id="ge' + k + 'k" class="cel">' + op.map(function (c) { return '<option' + (c.concepto === x.concepto ? ' selected' : '') + '>' + esc(c.concepto) + '</option>'; }).join('') + '</select></td>' +
+          '<td class="n"><input id="ge' + k + 'm" type="number" step="any" value="' + esc(x.monto) + '" class="cel" style="width:90px"></td>' +
+          '<td class="n"><input id="ge' + k + 'c" type="number" step="any" placeholder="21 %" value="' + esc(x.credito_fiscal) + '" class="cel" style="width:80px"></td>' +
+          '<td><button class="chip" style="padding:2px 9px;color:#e5484d" onclick="IMP.gastQuitar(' + k + ')">✕</button></td></tr>'; }).join('') +
+      '</tbody></table></div><div class="ped-sub">Si dejás el IVA crédito vacío se calcula el 21 % del monto.</div>' +
+      '<div class="acciones" style="margin-top:8px"><button class="btn" onclick="IMP.gastGuardar()">Guardar cambios</button><button class="btn sec" onclick="IMP.gastFila()">＋ Fila</button><button class="btn sec" onclick="IMP.gastCancelar()">Cancelar</button></div>';
+  }
+  function gastEditar() { GE = { rows: cp(CA.obl.filter(function (x) { return x.concepto !== 'Impuestos' && CA.r.grupo[x.concepto] && CA.r.grupo[x.concepto] !== 'proveedor'; })) }; pintarCalculos(); }
+  function leerGE() { GE.rows.forEach(function (x, k) { if (x._del) return; x.concepto = $('ge' + k + 'k').value; x.monto = $('ge' + k + 'm').value; x.credito_fiscal = $('ge' + k + 'c').value; }); }
+  function gastFila() { leerGE(); GE.rows.push({ concepto: 'SEDI', monto: '', credito_fiscal: '' }); pintarCalculos(); }
+  function gastQuitar(k) { leerGE(); if (GE.rows[k].id) GE.rows[k]._del = true; else GE.rows.splice(k, 1); pintarCalculos(); }
+  function gastCancelar() { GE = null; pintarCalculos(); }
+  function gastGuardar() {
+    leerGE(); var ps = [], mal = false, orig = {}; CA.obl.forEach(function (x) { orig[x.id] = x; });
+    GE.rows.forEach(function (x) {
+      if (x._del) { ps.push(rest('obligaciones?id=eq.' + x.id, { metodo: 'DELETE' })); return; }
+      if (x.monto === '' || isNaN(Number(x.monto))) { mal = true; return; }
+      var m = Number(x.monto), c = { concepto: x.concepto, monto: m, credito_fiscal: x.credito_fiscal === '' || x.credito_fiscal == null ? r2(m * 0.21) : Number(x.credito_fiscal) };
+      if (!x.id) { c.operacion_id = CA.id; c.moneda = (CA.o.pedido || {}).moneda || 'USD'; ps.push(rest('obligaciones', { metodo: 'POST', cuerpo: c })); return; }
+      var y = orig[x.id];
+      if (y.concepto !== c.concepto || Number(y.monto) !== c.monto || Number(y.credito_fiscal) !== c.credito_fiscal) ps.push(rest('obligaciones?id=eq.' + x.id, { metodo: 'PATCH', cuerpo: c }));
+    });
+    if (mal) { toast('Cada gasto necesita un monto'); return; }
+    var n = ps.length; Promise.all(ps).then(function () { if (n) bitacora(CA.id, 'gastos editados', { cambios: n }); GE = null; toast(n ? 'Cambios guardados' : 'Sin cambios'); calculos(CA.id); })
+      .catch(function (e) { toast(/foreign|aplicaciones/i.test(e.message) ? 'Un gasto tiene pagos aplicados: no se puede sacar' : (e.message || e)); });
+  }
+
   function defaults(id) {
     rest('rpc/cargar_defaults_calculo', { metodo: 'POST', cuerpo: { p_op: id } }).then(function () { bitacora(id, 'valores por defecto cargados'); toast('Valores cargados'); calculos(id); })
       .catch(function (e) { toast(e.message || e); });
@@ -464,21 +536,57 @@ var IMP = (function () {
 
   /** Cuadro de productos como en el Excel: código, descripción, cantidad, precio, importe y totales. */
   function tablaItems(items, moneda, op) {
-    var u = 0, t = 0, o = op || {};
-    var filas = items.map(function (i) {
+    var o = op || {}, ed = !!(o.editando && EI), u = 0, t = 0, filas;
+    if (ed) {
+      filas = EI.rows.map(function (i, k) {
+        if (i._del) return '';
+        var imp = Math.round(Number(i.cantidad || 0) * Number(i.precio_unit || 0) * 100) / 100; u += Number(i.cantidad || 0); t += imp;
+        var src = i.id && o.src ? o.src(i) : '';
+        return '<tr><td class="c"><input id="ei' + k + 'l" type="number" value="' + esc(i.linea) + '" class="cel" style="width:44px"></td>' +
+          '<td class="f">' + (src ? '<img src="' + src + '" class="mini">' : '') + '</td>' +
+          '<td><input id="ei' + k + 'c" value="' + esc(i.codigo || '') + '" class="cel" style="width:90px"></td>' +
+          '<td class="d"><input id="ei' + k + 'd" value="' + esc(i.detalle || '') + '" class="cel" style="width:190px"></td>' +
+          '<td class="n"><input id="ei' + k + 'q" type="number" value="' + esc(i.cantidad) + '" class="cel" style="width:70px"></td>' +
+          '<td class="n"><input id="ei' + k + 'p" type="number" step="any" value="' + esc(i.precio_unit) + '" class="cel" style="width:80px"></td>' +
+          '<td class="n">' + fmt(imp) + '</td><td><button class="chip" style="padding:2px 9px;color:#e5484d" onclick="IMP.itemsQuitar(' + k + ')">✕</button></td></tr>';
+      }).join('');
+    } else filas = items.map(function (i) {
       var imp = Math.round(i.cantidad * i.precio_unit * 100) / 100; u += Number(i.cantidad); t += imp;
       var src = o.src ? o.src(i) : '', foto = src
         ? '<img src="' + src + '" class="mini" onclick="IMP.ver(this.src)">'
         : (o.editar && i.id ? '<button class="mini vacia" onclick="IMP.elegirFoto(\'' + i.id + '\',\'' + o.editar + '\')">＋</button>' : '');
       if (src && o.editar && i.id) foto += '<div><button class="chip" style="padding:1px 8px;font-size:11px" onclick="IMP.elegirFoto(\'' + i.id + '\',\'' + o.editar + '\')">cambiar</button></div>';
       return '<tr><td class="c">' + esc(i.linea) + '</td><td class="f">' + foto + '</td><td>' + esc(i.codigo || '') + '</td><td class="d">' + esc(i.detalle) +
-             '</td><td class="n">' + fmt0(i.cantidad) + '</td><td class="n">' + fmt(i.precio_unit) + '</td><td class="n">' + fmt(imp) + '</td>' +
-             (o.editar && i.id ? '<td class="c"><button class="chip" style="padding:2px 9px" onclick="IMP.editarItem(\'' + o.editar + '\',\'' + i.id + '\')">✎</button></td>' : (o.editar ? '<td></td>' : '')) + '</tr>';
+             '</td><td class="n">' + fmt0(i.cantidad) + '</td><td class="n">' + fmt(i.precio_unit) + '</td><td class="n">' + fmt(imp) + '</td></tr>';
     }).join('');
     return '<div class="tabla-items"><table><thead><tr><th>#</th><th>Foto</th><th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio ' + esc(moneda || 'USD') +
-           '</th><th>Importe</th>' + (o.editar ? '<th></th>' : '') + '</tr></thead><tbody>' + filas + '</tbody><tfoot><tr><td colspan="4">Total</td><td class="n">' + fmt0(u) +
-           '</td><td></td><td class="n">' + fmt(t) + '</td>' + (o.editar ? '<td></td>' : '') + '</tr></tfoot></table></div>' +
-           (o.editar ? '<div class="acciones" style="margin-top:8px"><button class="btn sec" onclick="IMP.editarItem(\'' + o.editar + '\',\'\')">＋ Agregar producto</button></div>' : '');
+           '</th><th>Importe</th>' + (ed ? '<th></th>' : '') + '</tr></thead><tbody>' + filas + '</tbody><tfoot><tr><td colspan="4">Total</td><td class="n">' + fmt0(u) +
+           '</td><td></td><td class="n">' + fmt(t) + '</td>' + (ed ? '<td></td>' : '') + '</tr></tfoot></table></div>';
+  }
+  // ---- edición de productos directamente en la tabla
+  var EI = null, LAST = null;
+  function repintar() { pintarFicha.apply(null, LAST); }
+  function itemsEditar(opId) { EI = { op: opId, rows: (FI.items || []).map(function (x) { return JSON.parse(JSON.stringify(x)); }) }; repintar(); }
+  function leerEI() { EI.rows.forEach(function (r, k) { if (r._del) return; r.linea = $('ei' + k + 'l').value; r.codigo = $('ei' + k + 'c').value; r.detalle = $('ei' + k + 'd').value; r.cantidad = $('ei' + k + 'q').value; r.precio_unit = $('ei' + k + 'p').value; }); }
+  function itemsFila() { leerEI(); var mx = 0; EI.rows.forEach(function (r) { if (!r._del && Number(r.linea) > mx) mx = Number(r.linea); }); EI.rows.push({ linea: mx + 1, codigo: '', detalle: '', cantidad: '', precio_unit: '' }); repintar(); }
+  function itemsQuitar(k) { leerEI(); if (EI.rows[k].id) EI.rows[k]._del = true; else EI.rows.splice(k, 1); repintar(); }
+  function itemsCancelar() { EI = null; repintar(); }
+  function itemsGuardar() {
+    leerEI();
+    var orig = {}, ps = [], mal = false; (FI.items || []).forEach(function (x) { orig[x.id] = x; });
+    EI.rows.forEach(function (r) {
+      if (r._del) { ps.push(rest('operacion_items?id=eq.' + r.id, { metodo: 'DELETE' })); return; }
+      var c = { linea: Number(r.linea), codigo: (r.codigo || '').trim() || null, detalle: (r.detalle || '').trim(), cantidad: Number(r.cantidad), precio_unit: Number(r.precio_unit) };
+      if (!c.detalle || !(c.linea > 0) || r.cantidad === '' || r.precio_unit === '' || isNaN(c.cantidad) || isNaN(c.precio_unit)) { mal = true; return; }
+      if (!r.id) { c.operacion_id = EI.op; ps.push(rest('operacion_items', { metodo: 'POST', cuerpo: c })); return; }
+      var x = orig[r.id];
+      if (x.linea !== c.linea || (x.codigo || null) !== c.codigo || x.detalle !== c.detalle || Number(x.cantidad) !== c.cantidad || Number(x.precio_unit) !== c.precio_unit)
+        ps.push(rest('operacion_items?id=eq.' + r.id, { metodo: 'PATCH', cuerpo: c }));
+    });
+    if (mal) { toast('Cada producto necesita línea, descripción, cantidad y precio'); return; }
+    var op = EI.op, n = ps.length;
+    Promise.all(ps).then(function () { if (n) bitacora(op, 'productos editados', { cambios: n }); EI = null; toast(n ? 'Cambios guardados' : 'Sin cambios'); ficha(op); })
+      .catch(function (e) { toast(e.message || e); });
   }
   function fmt0(n) { return Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 }); }
   function fila(k, v) { return v ? '<div class="ped-sub"><b>' + esc(k) + ':</b> ' + esc(v) + '</div>' : ''; }
@@ -744,6 +852,6 @@ var IMP = (function () {
   }
 
   return { login: login, iniciar: iniciar, salir: salir, abrir: abrir, filtrar: filtrar, buscar: buscar,
-           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarPago: editarPago, guardarPago: guardarPago, borrarPago: borrarPago, valoresDefecto: valoresDefecto, agregarDef: agregarDef, quitarDef: quitarDef, guardarDef: guardarDef, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, elegirFoto: elegirFoto,
+           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarPago: editarPago, guardarPago: guardarPago, borrarPago: borrarPago, valoresDefecto: valoresDefecto, agregarDef: agregarDef, quitarDef: quitarDef, guardarDef: guardarDef, itemsEditar: itemsEditar, itemsGuardar: itemsGuardar, itemsFila: itemsFila, itemsQuitar: itemsQuitar, itemsCancelar: itemsCancelar, tribEditar: tribEditar, tribGuardar: tribGuardar, tribFila: tribFila, tribQuitar: tribQuitar, tribCancelar: tribCancelar, gastEditar: gastEditar, gastGuardar: gastGuardar, gastFila: gastFila, gastQuitar: gastQuitar, gastCancelar: gastCancelar, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, elegirFoto: elegirFoto,
            confirmar: confirmar, despachante: despachante, guardarDespachante: guardarDespachante, pedirMail: pedirMail };
 })();
