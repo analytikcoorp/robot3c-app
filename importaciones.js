@@ -169,7 +169,7 @@ var IMP = (function () {
     (o.items || []).sort(function (a, b) { return a.linea - b.linea; })
       .forEach(function (i) { tot += i.cantidad * i.precio_unit; });
     var h = (E.perm.dinero ? '<div class="chips"><span class="chip act">Operación</span><span class="chip" onclick="IMP.calculos(\'' + o.id + '\')">Cálculos</span></div>' : '') +
-      '<h2>' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc(p.codigo_interno)) + '</h2>' +
+      '<h2>' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc(p.codigo_interno)) + ((p.proveedor || {}).nombre ? ' · ' + esc(p.proveedor.nombre) : '') + '</h2>' +
       '<div class="ped-sub">' + esc(p.codigo_interno) + ' · ' + esc(p.producto || '') + '</div>';
     if (E.perm.dinero) {
       var pg = 0; o._pagos.forEach(function (x) { pg += Number(x.monto); });
@@ -181,31 +181,33 @@ var IMP = (function () {
           return '<option value="' + x.id + '"' + (x.id === o.estado_id ? ' selected' : '') + '>' + esc(x.nombre) + '</option>';
         }).join('') + '</select>';
     } else h += '<div class="ped-msg">' + esc(o.estado.nombre) + '</div>';
-    h += '<div class="sub">Datos</div>' +
+    h += '<div class="sub" style="display:flex;align-items:center;gap:8px">Datos' + (E.perm.cargar ?
+      '<button class="chip" style="padding:2px 10px;font-size:15px;text-transform:none" title="Editar datos" onclick="IMP.editarDatos(\'' + o.id + '\')">✎</button>' : '') + '</div>' +
       fila('Importador', (p.importador || {}).nombre) + fila('Proveedor', (p.proveedor || {}).nombre) +
       fila('Trader', p.trader ? p.trader.nombre + ' (' + (p.trader.comision * 100) + '%)' : '') +
       fila('Despachante', (o.despachante || {}).nombre) + fila('Transporte', o.transporte) + fila('Tracking', o.tracking) + fila('Comentario', o.comentario) +
       fila('ETD', o.etd ? fecha(o.etd) : '') + fila('ETA', o.eta ? fecha(o.eta) : '') +
       ((o.unif || []).length ? fila('OP unificadas', o.unif.map(function (u) { return u.op_numero; }).join(', ')) : '');
-    if (E.perm.cargar) h += '<div class="acciones"><button class="btn sec" onclick="IMP.editarDatos(\'' + o.id + '\')">✎ Editar datos</button></div>';
     h += '<div class="sub">Mail de alta al despachante</div>' + estadoMail(o);
     if (E.perm.admin || (E.perm.cargar && !o.op_numero)) {
       h += '<div class="acciones" style="margin-top:8px"><input id="impOp" placeholder="N° de OP" value="' + esc(o.op_numero || '') + '" style="flex:1">' +
         '<button class="btn sec" onclick="IMP.guardarOp(\'' + o.id + '\')">' + (o.op_numero ? 'Cambiar OP' : 'Asignar OP') + '</button></div>';
     }
     if (E.perm.dinero) {
-      h += '<div class="sub">Pagos al proveedor</div>' + (o._pagos.length ? o._pagos.map(function (x) {
+      h += '<div class="sub" style="display:flex;align-items:center;gap:8px">Pagos al proveedor' + (E.perm.cargar ?
+        '<button class="chip" style="padding:2px 10px;font-size:15px;text-transform:none" title="Registrar pago" onclick="IMP.editarPago(\'' + o.id + '\',\'\')">＋</button>' : '') + '</div>' + (o._pagos.length ? o._pagos.map(function (x) {
         return '<div class="ped-sub" style="display:flex;align-items:center;gap:8px"><span style="flex:1"><b>' + esc(x.concepto) + '</b> · ' + esc(fecha(x.fecha)) + ' · ' + fmt(x.monto) + ' ' + esc(x.moneda) +
           (x.comentario ? ' · ' + esc(x.comentario) : '') + '</span><button class="chip" style="padding:2px 9px" onclick="IMP.editarPago(\'' + o.id + '\',\'' + x.id + '\')">✎</button></div>';
       }).join('') : '<div class="ped-sub">Todavía no hay pagos registrados.</div>') +
-        '<div class="acciones" style="margin-top:6px"><button class="btn sec" onclick="IMP.editarPago(\'' + o.id + '\',\'\')">＋ Registrar pago</button></div>' +
         '<div class="sub">Obligaciones por bloque</div>' + (pagos.length ? pagos.map(function (x) {
         return fila((BLOQ[x.bloque] || x.bloque) + ' (' + x.moneda + ')',
           'debe ' + fmt(x.a_pagar) + ' · pagado ' + fmt(x.pagado) + ' · saldo ' + fmt(x.saldo) + ' · ' + x.estado_pago);
       }).join('') : '<div class="ped-sub">Todavía no hay obligaciones cargadas.</div>');
     }
     h += '<div class="sub">Productos (' + (o.items || []).length + ' líneas · total ' + fmt(tot) + ' ' + esc(p.moneda || 'USD') + ')</div>' +
-      (E.perm.cargar && !EI ? '<div class="acciones" style="margin-bottom:6px"><button class="btn sec" onclick="IMP.itemsEditar(\'' + o.id + '\')">✎ Editar tabla</button></div>' : '') +
+      (E.perm.cargar && !EI ? '<div class="acciones" style="margin-bottom:6px"><button class="btn sec" onclick="IMP.itemsEditar(\'' + o.id + '\')">✎ Editar tabla</button>' +
+        (o.proforma_path && /\.xlsx$/i.test(o.proforma_path) && (o.items || []).some(function (i) { return !i.foto_path; }) ?
+          '<button class="btn sec" id="impFotosBtn" onclick="IMP.traerFotos(\'' + o.id + '\')">📷 Traer fotos de la proforma</button>' : '') + '</div>' : '') +
       tablaItems(o.items || [], p.moneda, { src: function (i) { return urls && urls[i.foto_path] || ''; }, editar: E.perm.cargar && !EI ? o.id : '', editando: !!EI }) +
       (EI ? '<div class="acciones" style="margin-top:8px"><button class="btn" onclick="IMP.itemsGuardar()">Guardar cambios</button><button class="btn sec" onclick="IMP.itemsFila()">＋ Fila</button><button class="btn sec" onclick="IMP.itemsCancelar()">Cancelar</button></div>' : '') +
       '<div class="acciones" style="margin-top:14px"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
@@ -486,6 +488,34 @@ var IMP = (function () {
     if (!confirm('¿Sacar este gasto?')) return;
     rest('obligaciones?id=eq.' + gid, { metodo: 'DELETE' }).then(function () { bitacora(CA.id, 'gasto quitado', { id: gid }); calculos(CA.id); })
       .catch(function (e) { toast(/foreign|aplicaciones/i.test(e.message) ? 'Tiene pagos aplicados: no se puede sacar' : e.message); });
+  }
+
+  /** Saca las fotos del Excel original que quedó guardado y se las pone a los productos que no tienen. */
+  var traerBusy = false;
+  function traerFotos(opId) {
+    if (traerBusy) return; traerBusy = true;
+    var b = $('impFotosBtn'), dir = FI.proforma_path.replace(/[^\/]+$/, ''), msg = function (t) { if (b) b.textContent = t; };
+    msg('Descargando la proforma…');
+    firmar([FI.proforma_path]).then(function (m) {
+      var u = m[FI.proforma_path]; if (!u) throw new Error('No pude abrir la proforma guardada');
+      return fetch(u).then(function (r) { if (!r.ok) throw new Error('No pude descargar la proforma'); return r.arrayBuffer(); });
+    }).then(function (buf) {
+      msg('Buscando las fotos…');
+      return Proforma.leerProforma(buf).then(function (d) { return Proforma.fotos(buf, d.items); });
+    }).then(function (fs) {
+      var porLinea = {}; (FI.items || []).forEach(function (i) { if (!i.foto_path) porLinea[i.linea] = i; });
+      var lista = fs.filter(function (x) { return porLinea[x.linea]; }), hechas = 0, falla = 0;
+      if (!lista.length) throw new Error('No encontré fotos para estos productos');
+      function una() {
+        var x = lista.shift(); if (!x) return Promise.resolve();
+        var it = porLinea[x.linea], ruta = dir + 'fotos/' + x.linea + '.jpg';
+        return achicar(new Blob([x.bytes]), 560).then(function (bl) { return subir(ruta, bl, 'image/jpeg'); })
+          .then(function () { return rest('operacion_items?id=eq.' + it.id, { metodo: 'PATCH', cuerpo: { foto_path: ruta } }); })
+          .then(function () { msg('Subiendo fotos (' + (++hechas) + ')…'); }).catch(function () { falla++; }).then(una);
+      }
+      return Promise.all([una(), una(), una(), una()]).then(function () { return [hechas, falla]; });
+    }).then(function (r) { traerBusy = false; toast(r[0] + ' fotos cargadas' + (r[1] ? ' · ' + r[1] + ' fallaron' : '')); ficha(opId); })
+      .catch(function (e) { traerBusy = false; msg('📷 Traer fotos de la proforma'); toast(e.message || e); });
   }
 
   // ------------------------------------------------------------ fotos de productos
@@ -853,6 +883,6 @@ var IMP = (function () {
   }
 
   return { login: login, iniciar: iniciar, salir: salir, abrir: abrir, filtrar: filtrar, buscar: buscar,
-           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarPago: editarPago, guardarPago: guardarPago, borrarPago: borrarPago, valoresDefecto: valoresDefecto, agregarDef: agregarDef, quitarDef: quitarDef, guardarDef: guardarDef, itemsEditar: itemsEditar, itemsGuardar: itemsGuardar, itemsFila: itemsFila, itemsQuitar: itemsQuitar, itemsCancelar: itemsCancelar, tribEditar: tribEditar, tribGuardar: tribGuardar, tribFila: tribFila, tribQuitar: tribQuitar, tribCancelar: tribCancelar, gastEditar: gastEditar, gastGuardar: gastGuardar, gastFila: gastFila, gastQuitar: gastQuitar, gastCancelar: gastCancelar, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, elegirFoto: elegirFoto,
+           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarPago: editarPago, guardarPago: guardarPago, borrarPago: borrarPago, valoresDefecto: valoresDefecto, agregarDef: agregarDef, quitarDef: quitarDef, guardarDef: guardarDef, itemsEditar: itemsEditar, itemsGuardar: itemsGuardar, itemsFila: itemsFila, itemsQuitar: itemsQuitar, itemsCancelar: itemsCancelar, tribEditar: tribEditar, tribGuardar: tribGuardar, tribFila: tribFila, tribQuitar: tribQuitar, tribCancelar: tribCancelar, gastEditar: gastEditar, gastGuardar: gastGuardar, gastFila: gastFila, gastQuitar: gastQuitar, gastCancelar: gastCancelar, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, traerFotos: traerFotos, elegirFoto: elegirFoto,
            confirmar: confirmar, despachante: despachante, guardarDespachante: guardarDespachante, pedirMail: pedirMail };
 })();
