@@ -500,6 +500,15 @@
   .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px;
     margin-right: 5px; vertical-align: -1px; }
   .filtro-local { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+  .tabla-items { overflow-x: auto; margin-top: 6px; border: 1px solid var(--line-fuerte); border-radius: 10px; background: var(--card); }
+  .tabla-items table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 12.5px; }
+  .tabla-items th { position: sticky; top: 0; background: var(--card-2); color: var(--accent); text-align: left; font-weight: 800;
+    padding: 7px 8px; border-bottom: 1px solid var(--line-fuerte); white-space: nowrap; }
+  .tabla-items td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .tabla-items td.d { min-width: 220px; }
+  .tabla-items td.c { color: var(--muted); }
+  .tabla-items th:nth-child(n+4), .tabla-items td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tabla-items tfoot td { font-weight: 800; background: var(--card-2); border-top: 2px solid var(--line-fuerte); border-bottom: 0; }
   .chips .chip.act { background: var(--accent); color: #fff; border-color: var(--accent); }
   .filtro-local .chip { font-size: 13px; font-weight: 700; }
   .filtro-local .chip.act { background: var(--ok-bg); color: var(--ok); border-color: var(--ok);

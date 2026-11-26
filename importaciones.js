@@ -188,13 +188,23 @@ var IMP = (function () {
       }).join('') : '<div class="ped-sub">Todavía no hay obligaciones cargadas.</div>');
     }
     h += '<div class="sub">Productos (' + (o.items || []).length + ' líneas · total ' + fmt(tot) + ' ' + esc(p.moneda || 'USD') + ')</div>' +
-      '<details><summary class="ped-sub">Ver detalle</summary>' + (o.items || []).map(function (i) {
-        return '<div class="ped-sub">' + esc(i.linea) + '. ' + esc(i.codigo ? i.codigo + ' · ' : '') + esc(i.detalle) +
-               ' — ' + fmt(i.cantidad) + ' × ' + fmt(i.precio_unit) + '</div>';
-      }).join('') + '</details>' +
+      tablaItems(o.items || [], p.moneda) +
       '<div class="acciones" style="margin-top:14px"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
     $('hoja').innerHTML = h;
   }
+  /** Cuadro de productos como en el Excel: código, descripción, cantidad, precio, importe y totales. */
+  function tablaItems(items, moneda) {
+    var u = 0, t = 0;
+    var filas = items.map(function (i) {
+      var imp = Math.round(i.cantidad * i.precio_unit * 100) / 100; u += Number(i.cantidad); t += imp;
+      return '<tr><td class="c">' + esc(i.linea) + '</td><td>' + esc(i.codigo || '') + '</td><td class="d">' + esc(i.detalle) +
+             '</td><td class="n">' + fmt0(i.cantidad) + '</td><td class="n">' + fmt(i.precio_unit) + '</td><td class="n">' + fmt(imp) + '</td></tr>';
+    }).join('');
+    return '<div class="tabla-items"><table><thead><tr><th>#</th><th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio ' + esc(moneda || 'USD') +
+           '</th><th>Importe</th></tr></thead><tbody>' + filas + '</tbody><tfoot><tr><td colspan="3">Total</td><td class="n">' + fmt0(u) +
+           '</td><td></td><td class="n">' + fmt(t) + '</td></tr></tfoot></table></div>';
+  }
+  function fmt0(n) { return Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 }); }
   function fila(k, v) { return v ? '<div class="ped-sub"><b>' + esc(k) + ':</b> ' + esc(v) + '</div>' : ''; }
 
   function estado(id, estadoId) {
@@ -298,8 +308,7 @@ var IMP = (function () {
       campo('impPd', 'Puerto de destino', d.puerto_destino) + campo('impPago', 'Forma de pago', d.pago) +
       campo('impInc', 'Incoterm', d.incoterm) + campo('impMon', 'Moneda', d.moneda || 'USD') +
       campo('impFec', 'Fecha de la proforma (AAAA-MM-DD)', d.fecha) + campo('impCom', 'Comentario', '') +
-      '<details style="margin-top:10px"><summary class="ped-sub">Ver los productos</summary>' + d.items.map(function (i) {
-        return '<div class="ped-sub">' + i.linea + '. ' + esc(i.codigo) + ' · ' + esc(i.detalle) + ' — ' + fmt(i.cantidad) + ' × ' + fmt(i.precio_unit) + '</div>'; }).join('') + '</details>' +
+      '<div class="sub">Productos</div>' + tablaItems(d.items, d.moneda) +
       '<div class="sub">Mail de alta</div>' + vistaMail(ds, d) +
       '<div class="acciones" style="margin-top:14px"><button class="btn" id="impOk" onclick="IMP.confirmar(this)">Confirmar alta</button>' +
       '<button class="btn sec" onclick="IMP.nueva()">Cancelar</button></div><div class="ped-msg" id="impMsg"></div>';
