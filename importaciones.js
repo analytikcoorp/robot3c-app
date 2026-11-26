@@ -166,7 +166,8 @@ var IMP = (function () {
     var p = o.pedido || {}, tot = 0;
     (o.items || []).sort(function (a, b) { return a.linea - b.linea; })
       .forEach(function (i) { tot += i.cantidad * i.precio_unit; });
-    var h = '<h2>' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc(p.codigo_interno)) + '</h2>' +
+    var h = (E.perm.dinero ? '<div class="chips"><span class="chip act">Operación</span><span class="chip" onclick="IMP.calculos(\'' + o.id + '\')">Cálculos</span></div>' : '') +
+      '<h2>' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc(p.codigo_interno)) + '</h2>' +
       '<div class="ped-sub">' + esc(p.codigo_interno) + ' · ' + esc(p.producto || '') + '</div>';
     if (E.perm.cargar) {
       h += '<div class="sub">Estado</div><select id="impEst" onchange="IMP.estado(\'' + o.id + '\',this.value)">' +
@@ -252,6 +253,155 @@ var IMP = (function () {
     rest('operacion_items?id=eq.' + itemId, { metodo: 'DELETE' })
       .then(function () { bitacora(opId, 'producto quitado', { linea: it.linea, detalle: it.detalle }); toast('Producto sacado'); ficha(opId); })
       .catch(function (e) { toast(e.message || e); });
+  }
+
+  // ------------------------------------------------------------ cálculos (como las hojas de OP del Excel)
+  var CA = null, BASES = { cif: 'CIF (FOB + flete + seguro)', fob: 'FOB (valor de la mercadería)', base_iva: 'CIF + derechos y tasas', manual: 'Monto fijo' };
+  var GRUPOS = { financiero: 'Financiero', flete_seguro: 'Flete y seguro', impositivo: 'Impositivo', administrativo: 'Administrativo' };
+  function r2(n) { return Math.round(n * 100) / 100; }
+  function pct(n) { return (Math.round(n * 10000) / 100).toLocaleString('es-AR') + ' %'; }
+  function calcular(c) {
+    var items = c.o.items || [], fob = 0, q = 0, grupo = {}, res = { flete: 0, seguro: 0 };
+    c.conceptos.forEach(function (k) { grupo[k.concepto] = k.grupo; });
+    items.forEach(function (i) { fob += i.cantidad * i.precio_unit; q += Number(i.cantidad); });
+    c.obl.forEach(function (x) { if (x.concepto === 'Flete') res.flete += Number(x.monto); if (x.concepto === 'Seguro') res.seguro += Number(x.monto); });
+    var cif = fob + res.flete + res.seguro, derechos = 0;
+    c.trib.forEach(function (t) { if (t.base_tipo === 'cif') { t._base = cif; t._monto = r2(cif * t.alicuota); derechos += t._monto; } });
+    var baseIva = cif + derechos, costoT = 0, credT = 0;
+    c.trib.forEach(function (t) {
+      if (t.base_tipo === 'fob') t._base = fob; else if (t.base_tipo === 'base_iva') t._base = baseIva; else if (t.base_tipo === 'manual') t._base = Number(t.base_imponible);
+      if (t.base_tipo !== 'cif') t._monto = r2(t._base * t.alicuota);
+      if (t.es_credito) credT += t._monto; else costoT += t._monto;
+    });
+    var g = { financiero: 0, flete_seguro: 0, impositivo: costoT, administrativo: 0 }, cred = credT, gastos = costoT;
+    c.obl.forEach(function (x) {
+      if (x.concepto === 'Impuestos') return;
+      var k = grupo[x.concepto]; if (!g.hasOwnProperty(k)) return;
+      g[k] += Number(x.monto); gastos += Number(x.monto); cred += Number(x.credito_fiscal);
+    });
+    c.r = { fob: fob, q: q, cif: cif, baseIva: baseIva, costoT: costoT, credT: credT, g: g, gastos: gastos, cred: cred, total: fob + gastos,
+            unit: q ? (fob + gastos) / q : 0, grupo: grupo };
+  }
+  /** Deja guardados los montos de tributos y la obligación «Impuestos» (la usa el resumen de pagos). */
+  function sincronizar(c) {
+    var p = [];
+    c.trib.forEach(function (t) {
+      if (t.base_tipo !== 'manual' && Math.abs(Number(t.base_imponible) - t._base) > 0.004) p.push(rest('tributos_operacion?id=eq.' + t.id, { metodo: 'PATCH', cuerpo: { base_imponible: r2(t._base) } }));
+    });
+    if (c.trib.length) {
+      var im = c.obl.filter(function (x) { return x.concepto === 'Impuestos'; })[0];
+      if (!im) p.push(rest('obligaciones', { metodo: 'POST', cuerpo: { operacion_id: c.o.id, concepto: 'Impuestos', moneda: (c.o.pedido || {}).moneda || 'USD', monto: r2(c.r.costoT), credito_fiscal: r2(c.r.credT) } }));
+      else if (Math.abs(im.monto - c.r.costoT) > 0.004 || Math.abs(im.credito_fiscal - c.r.credT) > 0.004)
+        p.push(rest('obligaciones?id=eq.' + im.id, { metodo: 'PATCH', cuerpo: { monto: r2(c.r.costoT), credito_fiscal: r2(c.r.credT) } }));
+    }
+    return Promise.all(p).catch(function () {});
+  }
+  function calculos(id) {
+    $('hoja').innerHTML = '<div class="vacio">Calculando…</div>';
+    var o = FI;
+    Promise.all([rest('obligaciones?operacion_id=eq.' + id + '&anulada=is.false&order=concepto'), rest('tributos_operacion?operacion_id=eq.' + id + '&order=orden'),
+                 rest('costos_conceptos?order=concepto')]).then(function (r) {
+      CA = { id: id, o: o, obl: r[0], trib: r[1], conceptos: r[2] };
+      calcular(CA);
+      return sincronizar(CA);
+    }).then(pintarCalculos).catch(function (e) { $('hoja').innerHTML = '<div class="vacio">' + esc(e.message || e) + '</div>'; });
+  }
+  function pintarCalculos() {
+    var c = CA, o = c.o, r = c.r, mon = esc((o.pedido || {}).moneda || 'USD'), id = c.id;
+    var vacio = !c.trib.length && !c.obl.length;
+    var h = '<div class="chips"><span class="chip" onclick="IMP.ficha(\'' + id + '\')">Operación</span><span class="chip act">Cálculos</span></div>' +
+      '<h2>' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc((o.pedido || {}).codigo_interno)) + ' · cálculos</h2>';
+    if (vacio) h += '<div class="ped-msg">Todavía no hay costos cargados. Podés empezar con los valores del modelo de tus hojas (derechos 20 %, tasa 3 %, IVA 21 %, honorarios del despachante…) y después cambiar lo que haga falta.</div>' +
+      '<div class="acciones"><button class="btn" onclick="IMP.defaults(\'' + id + '\')">Cargar valores por defecto</button></div>';
+    h += '<div class="sub">Resumen (' + mon + ')</div>' +
+      fila('FOB (mercadería)', fmt(r.fob)) + fila('Flete + seguro', fmt(r.cif - r.fob)) + fila('CIF imponible', fmt(r.cif)) +
+      fila('Total gastos (sin IVA/créditos)', fmt(r.gastos)) + fila('Costo total', fmt(r.total)) +
+      fila('Costo unitario promedio', fmt(r.unit)) + fila('Recargo sobre FOB', r.fob ? pct(r.total / r.fob - 1) : '') +
+      fila('Créditos fiscales', fmt(r.cred));
+    // tributos
+    h += '<div class="sub">Tributos de importación</div><div class="tabla-items"><table><thead><tr><th>Tributo</th><th>Base</th><th>%</th><th>Costo</th><th>Crédito</th><th></th></tr></thead><tbody>' +
+      c.trib.map(function (t) {
+        return '<tr><td class="d">' + esc(t.tributo) + '<div class="ped-sub">' + esc(BASES[t.base_tipo]) + '</div></td><td class="n">' + fmt(t._base) + '</td><td class="n">' + pct(t.alicuota) +
+          '</td><td class="n">' + (t.es_credito ? '' : fmt(t._monto)) + '</td><td class="n">' + (t.es_credito ? fmt(t._monto) : '') +
+          '</td><td><button class="chip" style="padding:2px 9px" onclick="IMP.editarTributo(\'' + t.id + '\')">✎</button></td></tr>'; }).join('') +
+      '</tbody><tfoot><tr><td colspan="3">Total</td><td class="n">' + fmt(r.costoT) + '</td><td class="n">' + fmt(r.credT) + '</td><td></td></tr></tfoot></table></div>' +
+      '<div class="acciones" style="margin-top:8px"><button class="btn sec" onclick="IMP.editarTributo(\'\')">＋ Agregar tributo</button></div>';
+    // gastos
+    var gastos = c.obl.filter(function (x) { return x.concepto !== 'Impuestos' && r.grupo[x.concepto] && r.grupo[x.concepto] !== 'proveedor'; });
+    h += '<div class="sub">Gastos</div><div class="tabla-items"><table><thead><tr><th>Concepto</th><th>Grupo</th><th>Monto</th><th>IVA crédito</th><th></th></tr></thead><tbody>' +
+      gastos.map(function (x) {
+        return '<tr><td class="d">' + esc(x.concepto) + (x.vencimiento ? '<div class="ped-sub">vence ' + esc(fecha(x.vencimiento)) + '</div>' : '') + '</td><td>' + esc(GRUPOS[r.grupo[x.concepto]] || '') +
+          '</td><td class="n">' + fmt(x.monto) + '</td><td class="n">' + fmt(x.credito_fiscal) +
+          '</td><td><button class="chip" style="padding:2px 9px" onclick="IMP.editarGasto(\'' + x.id + '\')">✎</button></td></tr>'; }).join('') +
+      '</tbody></table></div><div class="acciones" style="margin-top:8px"><button class="btn sec" onclick="IMP.editarGasto(\'\')">＋ Agregar gasto</button></div>';
+    // costo por producto
+    h += '<div class="sub">Costo por producto</div><div class="tabla-items"><table><thead><tr><th>#</th><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Financ.</th><th>Flete+seg.</th><th>Impos.</th><th>Adm.</th><th>Costo unit.</th><th>Costo total</th><th>%</th></tr></thead><tbody>' +
+      (o.items || []).map(function (i) {
+        var q = r.q || 1, f = r.g.financiero / q, fl = r.g.flete_seguro / q, im = r.g.impositivo / q, ad = r.g.administrativo / q, u = Number(i.precio_unit) + f + fl + im + ad;
+        return '<tr><td class="c">' + esc(i.linea) + '</td><td class="d">' + esc(i.detalle) + '</td><td class="n">' + fmt0(i.cantidad) + '</td><td class="n">' + fmt(i.precio_unit) + '</td><td class="n">' + fmt(f) +
+          '</td><td class="n">' + fmt(fl) + '</td><td class="n">' + fmt(im) + '</td><td class="n">' + fmt(ad) + '</td><td class="n"><b>' + fmt(u) + '</b></td><td class="n">' + fmt(u * i.cantidad) +
+          '</td><td class="n">' + (i.precio_unit > 0 ? pct(u / i.precio_unit - 1) : '') + '</td></tr>'; }).join('') +
+      '</tbody></table></div>';
+    // valor criterio
+    var ref = Number(o.valor_criterio_unit || 0) * r.q, gar = ref ? ref - r.fob : 0;
+    h += '<div class="sub">Valor criterio y caución</div>' + dato('cvCrit', 'Valor criterio por unidad (' + mon + ')', o.valor_criterio_unit, 'number') +
+      dato('cvCau', 'Caución (' + mon + ')', o.caucion, 'number') +
+      fila('Valor de referencia', ref ? fmt(ref) : '') + fila('Valor a garantizar', ref ? fmt(gar) : '') +
+      '<div class="acciones" style="margin-top:8px"><button class="btn sec" onclick="IMP.guardarCriterio(\'' + id + '\')">Guardar criterio</button></div>' +
+      '<div class="acciones" style="margin-top:14px"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
+    $('hoja').innerHTML = h;
+  }
+  function defaults(id) {
+    rest('rpc/cargar_defaults_calculo', { metodo: 'POST', cuerpo: { p_op: id } }).then(function () { bitacora(id, 'valores por defecto cargados'); toast('Valores cargados'); calculos(id); })
+      .catch(function (e) { toast(e.message || e); });
+  }
+  function guardarCriterio(id) {
+    var v = vv('cvCrit'), cau = vv('cvCau'), ref = Number(v || 0) * CA.r.q;
+    rest('operaciones?id=eq.' + id, { metodo: 'PATCH', cuerpo: { valor_criterio_unit: v === '' ? null : Number(v), caucion: cau === '' ? null : Number(cau), valor_garantizar: v === '' ? null : r2(ref - CA.r.fob) } })
+      .then(function () { FI.valor_criterio_unit = v === '' ? null : Number(v); FI.caucion = cau === '' ? null : Number(cau); toast('Guardado'); calculos(id); })
+      .catch(function (e) { toast(e.message || e); });
+  }
+  function editarTributo(tid) {
+    var t = CA.trib.filter(function (x) { return x.id === tid; })[0], nuevo = !t;
+    if (nuevo) t = { tributo: '', base_tipo: 'base_iva', base_imponible: 0, alicuota: 0, es_credito: false };
+    $('hoja').innerHTML = '<h2 class="vt">' + (nuevo ? 'Agregar tributo' : 'Editar tributo') + '</h2>' + dato('trNom', 'Tributo', t.tributo) +
+      '<div class="sub">Se calcula sobre</div><select id="trBase">' + Object.keys(BASES).map(function (k) { return '<option value="' + k + '"' + (k === t.base_tipo ? ' selected' : '') + '>' + esc(BASES[k]) + '</option>'; }).join('') + '</select>' +
+      dato('trFijo', 'Monto base (solo si es «Monto fijo»)', t.base_imponible, 'number') + dato('trPct', 'Alícuota (%) — en «Monto fijo» poné 100', Math.round(t.alicuota * 10000) / 100, 'number') +
+      '<div class="sub">Tipo</div><select id="trCred"><option value="0"' + (t.es_credito ? '' : ' selected') + '>Costo (se paga y suma al costo)</option><option value="1"' + (t.es_credito ? ' selected' : '') + '>Crédito fiscal (se recupera)</option></select>' +
+      '<div class="acciones" style="margin-top:14px"><button class="btn" onclick="IMP.guardarTributo(\'' + (nuevo ? '' : tid) + '\')">Guardar</button><button class="btn sec" onclick="IMP.calculos(\'' + CA.id + '\')">Cancelar</button>' +
+      (nuevo ? '' : '<button class="btn sec" style="margin-left:auto;color:#e5484d" onclick="IMP.borrarTributo(\'' + tid + '\')">Sacar</button>') + '</div>';
+  }
+  function guardarTributo(tid) {
+    var nom = vv('trNom'); if (!nom) { toast('Poné el nombre del tributo'); return; }
+    var c = { tributo: nom, base_tipo: $('trBase').value, base_imponible: Number(vv('trFijo') || 0), alicuota: Number(vv('trPct') || 0) / 100, es_credito: $('trCred').value === '1' };
+    var mx = 0; CA.trib.forEach(function (x) { if (x.orden > mx) mx = x.orden; });
+    var q = tid ? rest('tributos_operacion?id=eq.' + tid, { metodo: 'PATCH', cuerpo: c }) : (c.operacion_id = CA.id, c.orden = mx + 1, rest('tributos_operacion', { metodo: 'POST', cuerpo: c }));
+    q.then(function () { bitacora(CA.id, tid ? 'tributo editado' : 'tributo agregado', c); calculos(CA.id); }).catch(function (e) { toast(e.message || e); });
+  }
+  function borrarTributo(tid) {
+    if (!confirm('¿Sacar este tributo?')) return;
+    rest('tributos_operacion?id=eq.' + tid, { metodo: 'DELETE' }).then(function () { bitacora(CA.id, 'tributo quitado', { id: tid }); calculos(CA.id); }).catch(function (e) { toast(e.message || e); });
+  }
+  function editarGasto(gid) {
+    var x = CA.obl.filter(function (y) { return y.id === gid; })[0], nuevo = !x;
+    if (nuevo) x = { concepto: '', monto: '', credito_fiscal: '', vencimiento: '' };
+    var op = CA.conceptos.filter(function (k) { return k.concepto !== 'Impuestos' && GRUPOS[k.grupo]; });
+    $('hoja').innerHTML = '<h2 class="vt">' + (nuevo ? 'Agregar gasto' : 'Editar gasto') + '</h2><div class="sub">Concepto</div><select id="gsCon">' +
+      op.map(function (k) { return '<option' + (k.concepto === x.concepto ? ' selected' : '') + '>' + esc(k.concepto) + '</option>'; }).join('') + '</select>' +
+      dato('gsMon', 'Monto sin IVA', x.monto, 'number') + dato('gsCre', 'IVA crédito fiscal (vacío = 21 % del monto)', x.credito_fiscal, 'number') + dato('gsVen', 'Vencimiento (opcional)', x.vencimiento, 'date') +
+      '<div class="acciones" style="margin-top:14px"><button class="btn" onclick="IMP.guardarGasto(\'' + (nuevo ? '' : gid) + '\')">Guardar</button><button class="btn sec" onclick="IMP.calculos(\'' + CA.id + '\')">Cancelar</button>' +
+      (nuevo ? '' : '<button class="btn sec" style="margin-left:auto;color:#e5484d" onclick="IMP.borrarGasto(\'' + gid + '\')">Sacar</button>') + '</div>';
+  }
+  function guardarGasto(gid) {
+    if (vv('gsMon') === '') { toast('Poné el monto'); return; }
+    var m = Number(vv('gsMon')), c = { concepto: $('gsCon').value, monto: m, credito_fiscal: vv('gsCre') === '' ? r2(m * 0.21) : Number(vv('gsCre')), vencimiento: nul(vv('gsVen')) };
+    var q = gid ? rest('obligaciones?id=eq.' + gid, { metodo: 'PATCH', cuerpo: c }) : (c.operacion_id = CA.id, c.moneda = (CA.o.pedido || {}).moneda || 'USD', rest('obligaciones', { metodo: 'POST', cuerpo: c }));
+    q.then(function () { bitacora(CA.id, gid ? 'gasto editado' : 'gasto agregado', c); calculos(CA.id); }).catch(function (e) { toast(e.message || e); });
+  }
+  function borrarGasto(gid) {
+    if (!confirm('¿Sacar este gasto?')) return;
+    rest('obligaciones?id=eq.' + gid, { metodo: 'DELETE' }).then(function () { bitacora(CA.id, 'gasto quitado', { id: gid }); calculos(CA.id); })
+      .catch(function (e) { toast(/foreign|aplicaciones/i.test(e.message) ? 'Tiene pagos aplicados: no se puede sacar' : e.message); });
   }
 
   // ------------------------------------------------------------ fotos de productos
@@ -508,6 +658,6 @@ var IMP = (function () {
   }
 
   return { login: login, iniciar: iniciar, salir: salir, abrir: abrir, filtrar: filtrar, buscar: buscar,
-           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, elegirFoto: elegirFoto,
+           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, elegirFoto: elegirFoto,
            confirmar: confirmar, despachante: despachante, guardarDespachante: guardarDespachante, pedirMail: pedirMail };
 })();
