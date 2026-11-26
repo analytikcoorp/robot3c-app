@@ -160,7 +160,9 @@ var IMP = (function () {
       .catch(function (e) { $('hoja').innerHTML = '<div class="vacio">' + esc(e.message) + '</div>'; });
   }
   var BLOQ = { proveedor: 'Proveedor', logistica: 'Logística', nacionalizacion: 'Nacionalización' };
+  var FI = null;
   function pintarFicha(o, pagos, urls) {
+    FI = o;
     var p = o.pedido || {}, tot = 0;
     (o.items || []).sort(function (a, b) { return a.linea - b.linea; })
       .forEach(function (i) { tot += i.cantidad * i.precio_unit; });
@@ -175,9 +177,10 @@ var IMP = (function () {
     h += '<div class="sub">Datos</div>' +
       fila('Importador', (p.importador || {}).nombre) + fila('Proveedor', (p.proveedor || {}).nombre) +
       fila('Trader', p.trader ? p.trader.nombre + ' (' + (p.trader.comision * 100) + '%)' : '') +
-      fila('Despachante', (o.despachante || {}).nombre) + fila('Transporte', o.transporte) +
+      fila('Despachante', (o.despachante || {}).nombre) + fila('Transporte', o.transporte) + fila('Tracking', o.tracking) + fila('Comentario', o.comentario) +
       fila('ETD', o.etd ? fecha(o.etd) : '') + fila('ETA', o.eta ? fecha(o.eta) : '') +
       ((o.unif || []).length ? fila('OP unificadas', o.unif.map(function (u) { return u.op_numero; }).join(', ')) : '');
+    if (E.perm.cargar) h += '<div class="acciones"><button class="btn sec" onclick="IMP.editarDatos(\'' + o.id + '\')">✎ Editar datos</button></div>';
     h += '<div class="sub">Mail de alta al despachante</div>' + estadoMail(o);
     if (E.perm.admin || (E.perm.cargar && !o.op_numero)) {
       h += '<div class="acciones" style="margin-top:8px"><input id="impOp" placeholder="N° de OP" value="' + esc(o.op_numero || '') + '" style="flex:1">' +
@@ -194,6 +197,63 @@ var IMP = (function () {
       '<div class="acciones" style="margin-top:14px"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
     $('hoja').innerHTML = h;
   }
+  // ------------------------------------------------------------ edición
+  function dato(id, tit, val, tipo) { return '<div class="sub">' + tit + '</div><input id="' + id + '" type="' + (tipo || 'text') + '" value="' + esc(val == null ? '' : val) + '" style="width:100%">'; }
+  function vv(id) { return ($(id).value || '').trim(); }
+  function nul(v) { return v === '' ? null : v; }
+  function bitacora(id, ev, det) { rest('eventos', { metodo: 'POST', cuerpo: { operacion_id: id, evento: ev, detalle: det || {}, usuario: ses && ses.uid } }).catch(function () {}); }
+  function editarDatos(id) {
+    var o = FI, p = o.pedido || {};
+    $('hoja').innerHTML = '<h2 class="vt">Editar datos</h2>' +
+      '<div class="sub">Pedido</div>' +
+      dato('edProd', 'Producto', p.producto) + dato('edInc', 'Incoterm', p.incoterm) + dato('edPago', 'Forma de pago', p.forma_pago) +
+      dato('edMon', 'Moneda', p.moneda) + dato('edPc', 'Puerto de carga', p.puerto_carga) + dato('edPd', 'Puerto de destino', p.puerto_destino) +
+      dato('edCom', 'Comentario del pedido', p.comentario) +
+      '<div class="sub" style="margin-top:14px">Operación</div>' +
+      dato('edTr', 'Transporte (marítimo, aéreo…)', o.transporte) + dato('edTk', 'Tracking', o.tracking) +
+      dato('edEtd', 'ETD (salida)', o.etd, 'date') + dato('edEta', 'ETA (llegada estimada)', o.eta, 'date') +
+      dato('edArr', 'Fecha de arribo', o.fecha_arribo, 'date') + dato('edLib', 'Fecha de liberación', o.fecha_liberacion, 'date') +
+      dato('edOc', 'Comentario de la operación', o.comentario) +
+      '<div class="ped-msg" id="edMsg" style="display:none"></div>' +
+      '<div class="acciones" style="margin-top:14px"><button class="btn" onclick="IMP.guardarDatos(\'' + id + '\')">Guardar</button>' +
+      '<button class="btn sec" onclick="IMP.ficha(\'' + id + '\')">Cancelar</button></div>';
+  }
+  function guardarDatos(id) {
+    var o = FI;
+    var ped = { producto: vv('edProd') || (o.pedido || {}).producto, incoterm: nul(vv('edInc')), forma_pago: nul(vv('edPago')),
+      moneda: vv('edMon') || (o.pedido || {}).moneda || 'USD', puerto_carga: nul(vv('edPc')), puerto_destino: nul(vv('edPd')), comentario: nul(vv('edCom')) };
+    var op = { transporte: nul(vv('edTr')), tracking: nul(vv('edTk')), etd: nul(vv('edEtd')), eta: nul(vv('edEta')),
+      fecha_arribo: nul(vv('edArr')), fecha_liberacion: nul(vv('edLib')), comentario: nul(vv('edOc')) };
+    Promise.all([rest('pedidos?id=eq.' + o.pedido_id, { metodo: 'PATCH', cuerpo: ped }), rest('operaciones?id=eq.' + id, { metodo: 'PATCH', cuerpo: op })])
+      .then(function () { bitacora(id, 'datos editados', { pedido: ped, operacion: op }); toast('Datos guardados'); abrir(); ficha(id); })
+      .catch(function (e) { toast(e.message || e); });
+  }
+  function editarItem(opId, itemId) {
+    var o = FI, it = (o.items || []).filter(function (x) { return x.id === itemId; })[0], nuevo = !it;
+    if (nuevo) { var mx = 0; (o.items || []).forEach(function (x) { if (x.linea > mx) mx = x.linea; }); it = { linea: mx + 1, codigo: '', detalle: '', cantidad: '', precio_unit: '' }; }
+    $('hoja').innerHTML = '<h2 class="vt">' + (nuevo ? 'Agregar producto' : 'Editar producto') + '</h2>' +
+      dato('edLin', 'N° de línea', it.linea, 'number') + dato('edCod', 'Código', it.codigo) + dato('edDet', 'Descripción', it.detalle) +
+      dato('edCan', 'Cantidad', it.cantidad, 'number') + dato('edPre', 'Precio unitario', it.precio_unit, 'number') +
+      '<div class="acciones" style="margin-top:14px"><button class="btn" onclick="IMP.guardarItem(\'' + opId + '\',\'' + (nuevo ? '' : itemId) + '\')">Guardar</button>' +
+      '<button class="btn sec" onclick="IMP.ficha(\'' + opId + '\')">Cancelar</button>' +
+      (nuevo ? '' : '<button class="btn sec" style="margin-left:auto;color:#e5484d" onclick="IMP.borrarItem(\'' + opId + '\',\'' + itemId + '\')">Sacar</button>') + '</div>';
+  }
+  function guardarItem(opId, itemId) {
+    var c = { linea: Number(vv('edLin')), codigo: nul(vv('edCod')), detalle: vv('edDet'), cantidad: Number(vv('edCan')), precio_unit: Number(vv('edPre')) };
+    if (!c.detalle || !(c.linea > 0) || !(c.cantidad >= 0) || isNaN(c.precio_unit) || vv('edCan') === '' || vv('edPre') === '') { toast('Completá línea, descripción, cantidad y precio'); return; }
+    var q = itemId ? rest('operacion_items?id=eq.' + itemId, { metodo: 'PATCH', cuerpo: c })
+                   : (c.operacion_id = opId, rest('operacion_items', { metodo: 'POST', cuerpo: c }));
+    q.then(function () { bitacora(opId, itemId ? 'producto editado' : 'producto agregado', c); toast('Guardado'); ficha(opId); })
+     .catch(function (e) { toast(e.message || e); });
+  }
+  function borrarItem(opId, itemId) {
+    if (!confirm('¿Sacar este producto de la operación?')) return;
+    var it = (FI.items || []).filter(function (x) { return x.id === itemId; })[0] || {};
+    rest('operacion_items?id=eq.' + itemId, { metodo: 'DELETE' })
+      .then(function () { bitacora(opId, 'producto quitado', { linea: it.linea, detalle: it.detalle }); toast('Producto sacado'); ficha(opId); })
+      .catch(function (e) { toast(e.message || e); });
+  }
+
   // ------------------------------------------------------------ fotos de productos
   /** Reduce la foto (los originales pesan cientos de KB) a una miniatura de buena calidad. */
   function achicar(blob, max) {
@@ -251,11 +311,13 @@ var IMP = (function () {
         : (o.editar && i.id ? '<button class="mini vacia" onclick="IMP.elegirFoto(\'' + i.id + '\',\'' + o.editar + '\')">＋</button>' : '');
       if (src && o.editar && i.id) foto += '<div><button class="chip" style="padding:1px 8px;font-size:11px" onclick="IMP.elegirFoto(\'' + i.id + '\',\'' + o.editar + '\')">cambiar</button></div>';
       return '<tr><td class="c">' + esc(i.linea) + '</td><td class="f">' + foto + '</td><td>' + esc(i.codigo || '') + '</td><td class="d">' + esc(i.detalle) +
-             '</td><td class="n">' + fmt0(i.cantidad) + '</td><td class="n">' + fmt(i.precio_unit) + '</td><td class="n">' + fmt(imp) + '</td></tr>';
+             '</td><td class="n">' + fmt0(i.cantidad) + '</td><td class="n">' + fmt(i.precio_unit) + '</td><td class="n">' + fmt(imp) + '</td>' +
+             (o.editar && i.id ? '<td class="c"><button class="chip" style="padding:2px 9px" onclick="IMP.editarItem(\'' + o.editar + '\',\'' + i.id + '\')">✎</button></td>' : (o.editar ? '<td></td>' : '')) + '</tr>';
     }).join('');
     return '<div class="tabla-items"><table><thead><tr><th>#</th><th>Foto</th><th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio ' + esc(moneda || 'USD') +
-           '</th><th>Importe</th></tr></thead><tbody>' + filas + '</tbody><tfoot><tr><td colspan="4">Total</td><td class="n">' + fmt0(u) +
-           '</td><td></td><td class="n">' + fmt(t) + '</td></tr></tfoot></table></div>';
+           '</th><th>Importe</th>' + (o.editar ? '<th></th>' : '') + '</tr></thead><tbody>' + filas + '</tbody><tfoot><tr><td colspan="4">Total</td><td class="n">' + fmt0(u) +
+           '</td><td></td><td class="n">' + fmt(t) + '</td>' + (o.editar ? '<td></td>' : '') + '</tr></tfoot></table></div>' +
+           (o.editar ? '<div class="acciones" style="margin-top:8px"><button class="btn sec" onclick="IMP.editarItem(\'' + o.editar + '\',\'\')">＋ Agregar producto</button></div>' : '');
   }
   function fmt0(n) { return Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 }); }
   function fila(k, v) { return v ? '<div class="ped-sub"><b>' + esc(k) + ':</b> ' + esc(v) + '</div>' : ''; }
@@ -446,6 +508,6 @@ var IMP = (function () {
   }
 
   return { login: login, iniciar: iniciar, salir: salir, abrir: abrir, filtrar: filtrar, buscar: buscar,
-           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, ver: ver, elegirFoto: elegirFoto,
+           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, elegirFoto: elegirFoto,
            confirmar: confirmar, despachante: despachante, guardarDespachante: guardarDespachante, pedirMail: pedirMail };
 })();
