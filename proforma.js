@@ -143,7 +143,7 @@ var Proforma = (function () {
           var fi = mapa[f2] || {}, cod = limpio(fi[col.codigo]);
           var pr = fi[col.precio], q = fi[col.cantidad];
           if (!cod || typeof pr !== 'number' || typeof q !== 'number') break;
-          items.push({ linea: linea++, codigo: cod, detalle: limpio(fi[col.detalle]), cantidad: q, precio_unit: pr,
+          items.push({ linea: linea++, fila: f2, codigo: cod, detalle: limpio(fi[col.detalle]), cantidad: q, precio_unit: pr,
                        importe: typeof fi[col.importe] === 'number' ? fi[col.importe] : Math.round(q * pr * 100) / 100 });
         }
         if (!items.length) throw new Error('La tabla de productos está vacía.');
@@ -222,6 +222,33 @@ var Proforma = (function () {
     return Promise.all(tareas).then(armarZip);
   }
 
-  return { leerProforma: leerProforma, aliviar: aliviar, _celdas: celdas, _entradas: entradas, _crc32: crc32 };
+
+  /** Saca la foto de cada producto (las imágenes ancladas a la fila de cada ítem; ignora las ocultas). */
+  function fotos(buf, items) {
+    var b = buf instanceof Uint8Array ? buf : new Uint8Array(buf), lista = entradas(b);
+    return texto(b, lista, 'xl/worksheets/_rels/sheet1.xml.rels').then(function (rel) {
+      var m = /Target="([^"]*drawing[^"]*\.xml)"/.exec(rel); if (!m) return [];
+      var dib = m[1].split('/').pop();
+      return Promise.all([texto(b, lista, 'xl/drawings/' + dib), texto(b, lista, 'xl/drawings/_rels/' + dib + '.rels')]).then(function (r) {
+        var rels = {}, re = /<Relationship\b[^>]*>/g, x;
+        while ((x = re.exec(r[1]))) { var id = /Id="([^"]+)"/.exec(x[0]), tg = /Target="([^"]+)"/.exec(x[0]); if (id && tg) rels[id[1]] = tg[1]; }
+        var porFila = {}, are = /<xdr:(?:twoCellAnchor|oneCellAnchor)\b[\s\S]*?<\/xdr:(?:twoCellAnchor|oneCellAnchor)>/g, a;
+        while ((a = are.exec(r[0]))) {
+          var t = a[0]; if (/hidden="1"/.test(t)) continue;
+          var fr = /<xdr:from><xdr:col>(\d+)<\/xdr:col>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(t), em = /r:embed="([^"]+)"/.exec(t);
+          if (!fr || !em || !rels[em[1]]) continue;
+          (porFila[+fr[2] + 1] = porFila[+fr[2] + 1] || []).push({ col: +fr[1], media: 'xl/media/' + rels[em[1]].split('/').pop() });
+        }
+        var tareas = items.map(function (it) {
+          var c = (porFila[it.fila] || []).sort(function (p, q) { return (p.col === 1 ? 0 : 1) - (q.col === 1 ? 0 : 1) || p.col - q.col; })[0];
+          var e = c && lista.filter(function (z) { return z.nombre === c.media; })[0];
+          return e ? contenido(b, e).then(function (d) { return { linea: it.linea, bytes: d }; }) : null;
+        });
+        return Promise.all(tareas);
+      });
+    }).then(function (r) { return r.filter(Boolean); });
+  }
+
+  return { leerProforma: leerProforma, fotos: fotos, aliviar: aliviar, _celdas: celdas, _entradas: entradas, _crc32: crc32 };
 })();
 if (typeof module !== 'undefined') module.exports = Proforma;

@@ -152,13 +152,15 @@ var IMP = (function () {
     var pedidos = [rest('operaciones?id=eq.' + id + '&select=*,estado:estados(nombre),' +
       'despachante:despachantes(nombre,envio_activo),unif:operacion_ops_unificadas(op_numero,nota),' +
       'pedido:pedidos(codigo_interno,producto,moneda,proveedor:proveedores(nombre),trader:traders(nombre,comision),importador:importadores(nombre,cuit)),' +
-      'items:operacion_items(linea,codigo,detalle,cantidad,precio_unit)')];
+      'items:operacion_items(id,linea,codigo,detalle,cantidad,precio_unit,foto_path)')];
     if (E.perm.dinero) pedidos.push(rest('v_pagos_operacion?operacion_id=eq.' + id));
-    Promise.all(pedidos).then(function (r) { pintarFicha(r[0][0], r[1] || []); })
+    Promise.all(pedidos).then(function (r) {
+      return firmar((r[0][0].items || []).map(function (i) { return i.foto_path; })).then(function (urls) { pintarFicha(r[0][0], r[1] || [], urls); });
+    })
       .catch(function (e) { $('hoja').innerHTML = '<div class="vacio">' + esc(e.message) + '</div>'; });
   }
   var BLOQ = { proveedor: 'Proveedor', logistica: 'Logística', nacionalizacion: 'Nacionalización' };
-  function pintarFicha(o, pagos) {
+  function pintarFicha(o, pagos, urls) {
     var p = o.pedido || {}, tot = 0;
     (o.items || []).sort(function (a, b) { return a.linea - b.linea; })
       .forEach(function (i) { tot += i.cantidad * i.precio_unit; });
@@ -188,20 +190,71 @@ var IMP = (function () {
       }).join('') : '<div class="ped-sub">Todavía no hay obligaciones cargadas.</div>');
     }
     h += '<div class="sub">Productos (' + (o.items || []).length + ' líneas · total ' + fmt(tot) + ' ' + esc(p.moneda || 'USD') + ')</div>' +
-      tablaItems(o.items || [], p.moneda) +
+      tablaItems(o.items || [], p.moneda, { src: function (i) { return urls && urls[i.foto_path] || ''; }, editar: E.perm.cargar ? o.id : '' }) +
       '<div class="acciones" style="margin-top:14px"><button class="btn sec" onclick="cerrarHoja()">Cerrar</button></div>';
     $('hoja').innerHTML = h;
   }
+  // ------------------------------------------------------------ fotos de productos
+  /** Reduce la foto (los originales pesan cientos de KB) a una miniatura de buena calidad. */
+  function achicar(blob, max) {
+    return createImageBitmap(blob).then(function (bm) {
+      var k = Math.min(1, max / Math.max(bm.width, bm.height)), c = document.createElement('canvas'), x;
+      c.width = Math.max(1, Math.round(bm.width * k)); c.height = Math.max(1, Math.round(bm.height * k));
+      x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(bm, 0, 0, c.width, c.height);
+      return new Promise(function (ok, ko) { c.toBlob(function (b) { b ? ok(b) : ko(new Error('Imagen inválida')); }, 'image/jpeg', 0.8); });
+    });
+  }
+  /** URLs temporales (1 h) para ver las fotos del bucket privado. */
+  function firmar(paths) {
+    paths = paths.filter(Boolean);
+    if (!paths.length) return Promise.resolve({});
+    return acceso().then(function (tok) {
+      return fetch(CONFIG.supabase_url + '/storage/v1/object/sign/proformas', { method: 'POST',
+        headers: { apikey: CONFIG.supabase_key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expiresIn: 3600, paths: paths }) });
+    }).then(function (r) { return r.json(); }).then(function (l) {
+      var m = {}; (Array.isArray(l) ? l : []).forEach(function (x) { if (x.signedURL) m[x.path] = CONFIG.supabase_url + '/storage/v1' + x.signedURL; });
+      return m;
+    }).catch(function () { return {}; });
+  }
+  function ver(src) {
+    var v = document.createElement('div');
+    v.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99;display:flex;align-items:center;justify-content:center;padding:12px';
+    v.innerHTML = '<img src="' + src + '" style="max-width:100%;max-height:100%;border-radius:8px">';
+    v.onclick = function () { document.body.removeChild(v); };
+    document.body.appendChild(v);
+  }
+  var FOTO_ITEM = null;
+  /** Subir o cambiar la foto de un producto (cámara o galería). */
+  function elegirFoto(itemId, opId) {
+    FOTO_ITEM = { id: itemId, op: opId };
+    var i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*';
+    i.onchange = function () {
+      var f = i.files && i.files[0]; if (!f) return;
+      toast('Subiendo foto…');
+      var ruta = new Date().getFullYear() + '/fotos/' + FOTO_ITEM.id + '-' + Date.now() + '.jpg';
+      achicar(f, 560).then(function (b) { return subir(ruta, b, 'image/jpeg'); })
+        .then(function () { return rest('operacion_items?id=eq.' + FOTO_ITEM.id, { metodo: 'PATCH', cuerpo: { foto_path: ruta } }); })
+        .then(function () { toast('Foto guardada'); ficha(FOTO_ITEM.op); })
+        .catch(function (e) { toast(e.message || e); });
+    };
+    i.click();
+  }
+
   /** Cuadro de productos como en el Excel: código, descripción, cantidad, precio, importe y totales. */
-  function tablaItems(items, moneda) {
-    var u = 0, t = 0;
+  function tablaItems(items, moneda, op) {
+    var u = 0, t = 0, o = op || {};
     var filas = items.map(function (i) {
       var imp = Math.round(i.cantidad * i.precio_unit * 100) / 100; u += Number(i.cantidad); t += imp;
-      return '<tr><td class="c">' + esc(i.linea) + '</td><td>' + esc(i.codigo || '') + '</td><td class="d">' + esc(i.detalle) +
+      var src = o.src ? o.src(i) : '', foto = src
+        ? '<img src="' + src + '" class="mini" onclick="IMP.ver(this.src)">'
+        : (o.editar && i.id ? '<button class="mini vacia" onclick="IMP.elegirFoto(\'' + i.id + '\',\'' + o.editar + '\')">＋</button>' : '');
+      if (src && o.editar && i.id) foto += '<div><button class="chip" style="padding:1px 8px;font-size:11px" onclick="IMP.elegirFoto(\'' + i.id + '\',\'' + o.editar + '\')">cambiar</button></div>';
+      return '<tr><td class="c">' + esc(i.linea) + '</td><td class="f">' + foto + '</td><td>' + esc(i.codigo || '') + '</td><td class="d">' + esc(i.detalle) +
              '</td><td class="n">' + fmt0(i.cantidad) + '</td><td class="n">' + fmt(i.precio_unit) + '</td><td class="n">' + fmt(imp) + '</td></tr>';
     }).join('');
-    return '<div class="tabla-items"><table><thead><tr><th>#</th><th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio ' + esc(moneda || 'USD') +
-           '</th><th>Importe</th></tr></thead><tbody>' + filas + '</tbody><tfoot><tr><td colspan="3">Total</td><td class="n">' + fmt0(u) +
+    return '<div class="tabla-items"><table><thead><tr><th>#</th><th>Foto</th><th>Código</th><th>Descripción</th><th>Cant.</th><th>Precio ' + esc(moneda || 'USD') +
+           '</th><th>Importe</th></tr></thead><tbody>' + filas + '</tbody><tfoot><tr><td colspan="4">Total</td><td class="n">' + fmt0(u) +
            '</td><td></td><td class="n">' + fmt(t) + '</td></tr></tfoot></table></div>';
   }
   function fmt0(n) { return Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 }); }
@@ -277,7 +330,16 @@ var IMP = (function () {
       .then(function (r) {
         ALTA = { buf: new Uint8Array(r[0]), nombre: f.name, tipo: esPdf ? 'pdf' : 'xlsx', imp: r[1][0], prov: r[1][1], tr: r[1][2], desp: r[1][3] };
         return esPdf ? leerPdf(ALTA.buf) : Proforma.leerProforma(ALTA.buf);
-      }).then(function (d) { ALTA.d = d; formulario(); })
+      }).then(function (d) {
+        ALTA.d = d; ALTA.fotos = {};
+        if (esPdf) return;
+        $('impMsg').textContent = 'Preparando las fotos de los productos…';
+        return Proforma.fotos(ALTA.buf, d.items).then(function (fs) {
+          return Promise.all(fs.map(function (x) {
+            return achicar(new Blob([x.bytes]), 560).then(function (b) { ALTA.fotos[x.linea] = { blob: b, url: URL.createObjectURL(b) }; }).catch(function () {});
+          }));
+        }).catch(function () {});
+      }).then(function () { formulario(); })
       .catch(function (e) { $('impMsg').textContent = e.message || String(e); });
   }
   function opciones(lista, buscado, nuevoNombre, conVacio) {
@@ -308,7 +370,8 @@ var IMP = (function () {
       campo('impPd', 'Puerto de destino', d.puerto_destino) + campo('impPago', 'Forma de pago', d.pago) +
       campo('impInc', 'Incoterm', d.incoterm) + campo('impMon', 'Moneda', d.moneda || 'USD') +
       campo('impFec', 'Fecha de la proforma (AAAA-MM-DD)', d.fecha) + campo('impCom', 'Comentario', '') +
-      '<div class="sub">Productos</div>' + tablaItems(d.items, d.moneda) +
+      '<div class="sub">Productos' + (Object.keys(ALTA.fotos || {}).length ? ' (' + Object.keys(ALTA.fotos).length + ' con foto)' : '') + '</div>' +
+      tablaItems(d.items, d.moneda, { src: function (i) { return ALTA.fotos && ALTA.fotos[i.linea] ? ALTA.fotos[i.linea].url : ''; } }) +
       '<div class="sub">Mail de alta</div>' + vistaMail(ds, d) +
       '<div class="acciones" style="margin-top:14px"><button class="btn" id="impOk" onclick="IMP.confirmar(this)">Confirmar alta</button>' +
       '<button class="btn sec" onclick="IMP.nueva()">Cancelar</button></div><div class="ped-msg" id="impMsg"></div>';
@@ -336,6 +399,14 @@ var IMP = (function () {
       : Proforma.aliviar(ALTA.buf).then(function (lite) { return subir(pOrig, ALTA.buf).then(function () { return subir(pLite, lite); }); });
     subida
       .then(function () {
+        var ls = Object.keys(ALTA.fotos || {}), hechas = 0, rutas = {};
+        function una() {
+          var l = ls.shift(); if (!l) return Promise.resolve();
+          var r = base + 'fotos/' + l + '.jpg';
+          return subir(r, ALTA.fotos[l].blob, 'image/jpeg').then(function () { rutas[l] = r; msg.textContent = 'Subiendo fotos (' + (++hechas) + ')…'; }).catch(function () {}).then(una);
+        }
+        return Promise.all([una(), una(), una(), una()]).then(function () { ALTA.rutas = rutas; });
+      }).then(function () {
         msg.textContent = 'Creando el pedido y la operación…';
         return rest('rpc/alta_operacion', { metodo: 'POST', cuerpo: { p: {
           importador_id: imp === '__nuevo' ? '' : imp, importador_nuevo: imp === '__nuevo' ? d.comprador : '',
@@ -344,7 +415,7 @@ var IMP = (function () {
           puerto_carga: $('impPc').value.trim(), puerto_destino: $('impPd').value.trim(), fecha_proforma: $('impFec').value.trim(),
           comentario: $('impCom').value.trim(), despachante_id: ds.id, proforma_path: pOrig, proforma_liviana_path: pLite,
           enviar_mail: !!ds.envio_activo, items: d.items.map(function (i) {
-            return { linea: i.linea, codigo: i.codigo, detalle: i.detalle, cantidad: i.cantidad, precio_unit: i.precio_unit }; }) } } });
+            return { linea: i.linea, codigo: i.codigo, detalle: i.detalle, cantidad: i.cantidad, precio_unit: i.precio_unit, foto_path: (ALTA.rutas || {})[i.linea] || '' }; }) } } });
       }).then(function (r) { toast('Operación creada: ' + r.codigo_interno); abrir(); ficha(r.operacion_id); })
       .catch(function (e) { btn.disabled = false; msg.textContent = 'No se pudo crear: ' + (e.message || e); });
   }
@@ -375,6 +446,6 @@ var IMP = (function () {
   }
 
   return { login: login, iniciar: iniciar, salir: salir, abrir: abrir, filtrar: filtrar, buscar: buscar,
-           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo,
+           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, ver: ver, elegirFoto: elegirFoto,
            confirmar: confirmar, despachante: despachante, guardarDespachante: guardarDespachante, pedirMail: pedirMail };
 })();
