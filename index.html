@@ -691,7 +691,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-26 · 9';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-27 · 1';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -995,7 +995,7 @@ function refrescar() {
   if (!SESION) return;
   api('refrescar').then(function (d) {
     var antes = {}; DATA.pedidos.forEach(function (p) { antes[p.id] = p.estado; });
-    DATA.robot = d.robot; DATA.pedidos = d.pedidos;
+    DATA.robot = d.robot; DATA.pedidos = d.pedidos; DATA.automaticos = d.automaticos || [];
     d.pedidos.forEach(function (p) {
       if (antes[p.id] && antes[p.id] !== p.estado && (p.estado === 'listo' || p.estado === 'error'))
         toast((p.estado === 'listo' ? '✅ Listo: ' : '⚠️ Falló: ') + p.informe);
@@ -1010,7 +1010,8 @@ function actualizar() {
   b.classList.add('girando');
   buscarVersion();                              // ¿hay una versión nueva publicada?
   var tareas = [api('refrescar').then(function (d) {
-    DATA.robot = d.robot; DATA.pedidos = d.pedidos; pintarEstado(); pintarPedidos(); programar();
+    DATA.robot = d.robot; DATA.pedidos = d.pedidos; DATA.automaticos = d.automaticos || [];
+    pintarEstado(); pintarPedidos(); programar();
   })];
   if (!$('vAuto').hidden) { tareas.push(api('automaticos', { fresco: 1 }).then(function (d) {
     AUTOS = d.informes; if (TAB_AUTO === 'informes') pintarAutomaticos();
@@ -1104,9 +1105,28 @@ function pintarPedidos() {
     c.textContent = activos;
     c.style.display = activos ? 'block' : 'none';
   });
-  if (!p.length) { $('vMios').innerHTML = '<div class="vacio">Acá aparecen los informes que pidas.</div>'; return; }
+  // Lo que hicieron los procesos que corren solos (conciliación de las 7, cajas, ventas de
+  // las 00, mayorista, bancos) va mezclado acá, ordenado por hora con el resto: nadie los
+  // pidió, así que no son pedidos, pero esta es la pantalla que se mira a la mañana.
+  // Antes el único rastro era el aviso al celular, que se recorta a 400 caracteres y que
+  // desde el 12/11 rebotaba siempre. Pedido de Ana, 27/11/2026.
+  var autos = DATA.automaticos || [];
+  if (!p.length && !autos.length) { $('vMios').innerHTML = '<div class="vacio">Acá aparecen los informes que pidas.</div>'; return; }
   var nombres = { pendiente: 'En cola', generando: 'Generando…', listo: 'Listo', error: 'Error', cancelado: 'Cancelado' };
-  $('vMios').innerHTML = p.map(function (x) {
+  var todo = p.map(function (x) { return { cuando: +new Date(x.creado), pedido: x }; })
+    .concat(autos.map(function (a) { return { cuando: a.fecha, auto: a }; }))
+    .sort(function (a, b) { return b.cuando - a.cuando; });
+  $('vMios').innerHTML = todo.map(function (it) {
+    if (it.auto) {
+      var a = it.auto;
+      return '<div class="pedido"><div class="ped-top">' +
+        '<span class="ped-nom">' + esc(a.titulo || 'Robot 3C') + '</span>' +
+        '<span class="badge b-listo">Automático</span></div>' +
+        '<div class="ped-sub">' + esc(hora(a.fecha)) + '</div>' +
+        '<details><summary class="act-auto-sum">Ver el detalle</summary>' +
+        '<div class="act-auto">' + esc(a.texto || '') + '</div></details></div>';
+    }
+    var x = it.pedido;
     var acc = x.archivos.map(function (a, n) {
       var xl = /\.xlsx?$/i.test(a.nombre);
       return '<button class="btn" onclick="bajar(\'' + esc(x.id) + '\',' + n + ',this)">' +
@@ -3091,26 +3111,6 @@ function pintarActividad() {
         '<div class="ped-sub">' + esc(f.email || '(sin mail)') + ' · ' + esc(fechaCorta(f.fecha)) + '</div>' +
         (f.detalle ? '<div class="ped-msg">' + esc(f.detalle) + '</div>' : '') +
         '</div>';
-    }).join('');
-  }
-
-  // ---- lo que hicieron los procesos que corren solos. Nadie los pidió, así que no están
-  // en Pedidos: hasta el 26/11/2026 el único rastro era el aviso al celular, que se recorta
-  // a 400 caracteres y que desde el 12/11 rebotaba siempre. Ahora el texto queda entero acá.
-  h += '<div class="rubro">Procesos automáticos</div>';
-  if (!(d.automaticos || []).length) {
-    h += '<div class="pedido"><div class="ped-sub" style="margin:0">Sin resultados en el período. ' +
-      'Acá quedan completos la conciliación de las 7, las cajas, las ventas de las 00, ' +
-      'el mayorista y los bancos, aunque el aviso al celular no salga.</div></div>';
-  } else {
-    h += d.automaticos.map(function (a, i) {
-      return '<div class="pedido"><div class="ped-top">' +
-        '<span class="ped-nom">' + esc(a.titulo || 'Robot 3C') + '</span>' +
-        '<span class="badge b-listo">Listo</span></div>' +
-        '<div class="ped-sub">' + esc(fechaCorta(a.fecha)) + '</div>' +
-        '<details' + (i === 0 ? ' open' : '') + '>' +
-        '<summary class="act-auto-sum">Ver el detalle</summary>' +
-        '<div class="act-auto">' + esc(a.texto || '') + '</div></details></div>';
     }).join('');
   }
 
