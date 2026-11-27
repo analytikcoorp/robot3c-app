@@ -135,7 +135,8 @@ var IMP = (function () {
       var p = o.pedido || {};
       return '<div class="pedido" onclick="IMP.ficha(\'' + o.id + '\')" style="cursor:pointer">' +
         '<div class="ped-top"><span class="ped-nom">' + (o.op_numero ? 'OP ' + esc(o.op_numero) : esc(p.codigo_interno || 'Sin OP')) + '</span>' +
-        '<span class="badge">' + esc(o.estado.nombre) + '</span></div>' +
+        '<span style="display:flex;align-items:center;gap:8px"><span class="badge">' + esc(o.estado.nombre) + '</span>' +
+        (E.perm.admin ? '<button class="chip" title="Eliminar operación" style="padding:2px 10px;color:#e5484d" onclick="event.stopPropagation();IMP.eliminar(\'' + o.id + '\')">✕</button>' : '') + '</span></div>' +
         '<div class="ped-sub">' + esc(p.producto || '') + ((p.proveedor || {}).nombre ? ' · ' + esc(p.proveedor.nombre) : '') + '</div>' +
         '<div class="ped-sub">ETA ' + fecha(o.eta) + (o.transporte ? ' · ' + esc(o.transporte) : '') + '</div></div>';
     }).join('') : '<div class="vacio">No hay operaciones para este filtro.</div>';
@@ -816,6 +817,15 @@ var IMP = (function () {
       .catch(function (e) { btn.disabled = false; msg.textContent = 'No se pudo crear: ' + (e.message || e); });
   }
 
+  /** Elimina una operación (solo admin). La base guarda una copia en «operaciones_eliminadas». */
+  function eliminar(id) {
+    var o = (E.ops || []).filter(function (x) { return x.id === id; })[0] || {}, nom = o.op_numero ? 'OP ' + o.op_numero : ((o.pedido || {}).codigo_interno || 'esta operación');
+    if (!confirm('¿Eliminar ' + nom + '? Se borran sus productos, pagos, costos y archivos asociados de la base. Esta acción no se puede deshacer desde la app.')) return;
+    rest('rpc/eliminar_operacion', { metodo: 'POST', cuerpo: { p_op: id } })
+      .then(function () { toast('Operación eliminada'); abrir(); })
+      .catch(function (e) { toast(e.message || e); });
+  }
+
   // ------------------------------------------------------------ pagos al proveedor
   function editarPago(opId, pid) {
     var x = (FI._pagos || []).filter(function (y) { return y.id === pid; })[0], nuevo = !x;
@@ -920,6 +930,6 @@ var IMP = (function () {
   }
 
   return { login: login, iniciar: iniciar, salir: salir, abrir: abrir, filtrar: filtrar, buscar: buscar,
-           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarPago: editarPago, guardarPago: guardarPago, borrarPago: borrarPago, valoresDefecto: valoresDefecto, agregarDef: agregarDef, quitarDef: quitarDef, guardarDef: guardarDef, itemsEditar: itemsEditar, itemsGuardar: itemsGuardar, itemsFila: itemsFila, itemsQuitar: itemsQuitar, itemsCancelar: itemsCancelar, tribEditar: tribEditar, tribGuardar: tribGuardar, tribFila: tribFila, tribQuitar: tribQuitar, tribCancelar: tribCancelar, gastEditar: gastEditar, gastGuardar: gastGuardar, gastFila: gastFila, gastQuitar: gastQuitar, gastCancelar: gastCancelar, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, traerFotos: traerFotos, archivos: archivos, elegirFoto: elegirFoto,
+           ficha: ficha, estado: estado, guardarOp: guardarOp, nueva: nueva, leerArchivo: leerArchivo, editarPago: editarPago, guardarPago: guardarPago, borrarPago: borrarPago, valoresDefecto: valoresDefecto, agregarDef: agregarDef, quitarDef: quitarDef, guardarDef: guardarDef, itemsEditar: itemsEditar, itemsGuardar: itemsGuardar, itemsFila: itemsFila, itemsQuitar: itemsQuitar, itemsCancelar: itemsCancelar, tribEditar: tribEditar, tribGuardar: tribGuardar, tribFila: tribFila, tribQuitar: tribQuitar, tribCancelar: tribCancelar, gastEditar: gastEditar, gastGuardar: gastGuardar, gastFila: gastFila, gastQuitar: gastQuitar, gastCancelar: gastCancelar, calculos: calculos, defaults: defaults, guardarCriterio: guardarCriterio, editarTributo: editarTributo, guardarTributo: guardarTributo, borrarTributo: borrarTributo, editarGasto: editarGasto, guardarGasto: guardarGasto, borrarGasto: borrarGasto, editarDatos: editarDatos, guardarDatos: guardarDatos, editarItem: editarItem, guardarItem: guardarItem, borrarItem: borrarItem, ver: ver, eliminar: eliminar, traerFotos: traerFotos, archivos: archivos, elegirFoto: elegirFoto,
            confirmar: confirmar, despachante: despachante, guardarDespachante: guardarDespachante, pedirMail: pedirMail };
 })();
