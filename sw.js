@@ -3,8 +3,8 @@
  * Solo guarda la pantalla (HTML, ícono, manifest) para que la app abra sin internet.
  * Los pedidos al servidor NUNCA se guardan: siempre van en vivo.
  */
-var CACHE = 'robot3c-v3';
-var ARCHIVOS = ['./', './index.html', './config.js', './importaciones.js', './proforma.js', './manifest.json', './icono-192.png', './icono-512.png', './logo-jc-blanco.png'];
+var CACHE = 'robot3c-v4';
+var ARCHIVOS = ['./', './index.html', './config.js', './importaciones.js?v=27-3', './proforma.js', './manifest.json', './icono-192.png', './icono-512.png', './logo-jc-blanco.png'];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ARCHIVOS); }).then(function () {
@@ -23,7 +23,7 @@ self.addEventListener('fetch', function (e) {
   // todo lo que no sea esta misma página (servidor, Google) pasa de largo
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
   e.respondWith(
-    fetch(e.request).then(function (r) {
+    fetch(e.request, { cache: 'no-cache' }).then(function (r) {
       var copia = r.clone();
       caches.open(CACHE).then(function (c) { c.put(e.request, copia); }).catch(function () {});
       return r;
