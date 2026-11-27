@@ -909,8 +909,11 @@ var IMP = (function () {
       requestAnimationFrame(function () { $('hoja').className = 'hoja abierta'; });
     }).catch(function (e) { toast(e.message); });
   }
-  function mails(t) { return String(t || '').split(/[\s,;]+/).filter(function (m) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m); }); }
+  var RE_MAIL = /^[^@\s]+@[^@\s.]+(\.[^@\s.]+)*\.[A-Za-z]{2,}$/;
+  function mails(t) { return String(t || '').split(/[\s,;]+/).filter(function (m) { return m; }); }
   function guardarDespachante(id) {
+    var malas = mails($('dsPara').value).concat(mails($('dsCc').value)).filter(function (m) { return !RE_MAIL.test(m); });
+    if (malas.length) { toast('Revisá estas direcciones: ' + malas.join(', ')); return; }
     rest('despachantes?id=eq.' + id, { metodo: 'PATCH', cuerpo: { destinatarios: mails($('dsPara').value), copia: mails($('dsCc').value),
       asunto_plantilla: $('dsAsu').value, cuerpo_plantilla: $('dsCue').value, envio_activo: $('dsAct').checked } })
       .then(function () { toast('Guardado'); cerrarHoja(); }).catch(function (e) { toast(e.message); });
