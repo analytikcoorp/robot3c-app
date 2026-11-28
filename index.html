@@ -691,7 +691,7 @@
 var SESION = null;
 var DATA = { informes: [], pedidos: [], robot: {}, usuario: {} };
 var CLIENTES = null, ACTUAL = null, ELEGIDOS = [], timer = null, confirmando = false;
-var VERSION_APP = '2026-11-27 · 4';   // se muestra en la pantalla de la cuenta
+var VERSION_APP = '2026-11-27 · 5';   // se muestra en la pantalla de la cuenta
 var AUTOS = null, USU = null, EDIT = null, PREGS = [], timerPreg = null;
 var HILO = '';        // la charla que sigue lo que se escriba; vacío = empieza una nueva
 var ADENTRO = false;  // la app ya está abierta: no volver a elegir pantalla de arranque
@@ -1341,9 +1341,13 @@ function marcarTablero() {
   });
   var sp = $('sPrincipal');
   if (sp) sp.className = 'sub' + (enPrincipal ? ' act' : '');
-  var m = $('tTableroMas');
-  if (m) m.className = '';
-  if (dentro || enPrincipal) desplegarTableros(true);
+  // El cajón abre con las categorías plegadas (Ana, 27/11/2026): antes se desplegaban
+  // solas cada vez, y como casi siempre se está parado en un tablero, el menú se abría
+  // con toda la lista a la vista. Plegado, la marca de dónde estás va en "Tableros", que
+  // es lo único que se ve; si lo desplegás, vuelve a marcarse la categoría, como antes.
+  // classList y no className: className borraría la clase "abierto" de la flechita.
+  var m = $('tTableroMas'), sub = $('subTableros');
+  if (m) m.classList.toggle('act', (!sub || sub.hidden) && (dentro || enPrincipal));
 }
 
 function ver(v) {
